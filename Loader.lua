@@ -1,7 +1,7 @@
 -- === protogen.xyz Frontend Loader ===
 print("protogen.xyz frontend loader started...")
 
-local FrontendURL = "https://raw.githubusercontent.com/galaxydestroyer29/Protogen.xyz/refs/heads/main/UI.lua"  -- Change this
+local FrontendURL = "https://raw.githubusercontent.com/galaxydestroyer29/Protogen.xyz/refs/heads/main/UI.lua" 
 
 local success, err = pcall(function()
     loadstring(game:HttpGet(FrontendURL, true))()
