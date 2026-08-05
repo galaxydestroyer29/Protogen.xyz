@@ -1,4 +1,4 @@
--- Universal Box ESP & Chams (Players + NPCs) - Native UI Engine (Anatomical Core Bounds)
+-- Universal Box ESP & Chams (Players + NPCs) - Native UI Engine (8-Corner 3D Projection & Inset Fixed)
 -- Environment: Roblox Client (LocalScript)
 
 local CoreGui = game:GetService("CoreGui");
@@ -21,6 +21,7 @@ local ScreenGui = Instance.new("ScreenGui");
 ScreenGui.Name = "UniversalESP_Native";
 ScreenGui.ResetOnSpawn = false;
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling;
+ScreenGui.IgnoreGuiInset = true; -- Fixes the 36px topbar vertical drop (underground box glitch)
 
 pcall(function()
     local env = getgenv();
@@ -303,42 +304,49 @@ RunService.RenderStepped:Connect(function()
                         applyChams(character);
                     end
 
-                    -- Target core anatomical parts strictly (Excludes tools, weapons, hair, & accessories)
+                    -- 8-Corner 3D Projection over core anatomical parts
                     local minX, minY = math.huge, math.huge;
                     local maxX, maxY = -math.huge, -math.huge;
-                    local anyValid = false;
+                    local validPoints = false;
 
                     for _, part in ipairs(character:GetChildren()) do
                         if part:IsA("BasePart") then
                             local n = part.Name;
-                            if n == "Head" or n:find("Torso") or n:find("Leg") or n:find("Foot") or n == "HumanoidRootPart" then
-                                local pPos = part.Position;
-                                local pSize = part.Size;
-                                
-                                local topWorld = pPos + Vector3.new(0, pSize.Y / 2, 0);
-                                local botWorld = pPos - Vector3.new(0, pSize.Y / 2, 0);
-                                
-                                local topScreen, topVis = Camera:WorldToViewportPoint(topWorld);
-                                local botScreen, botVis = Camera:WorldToViewportPoint(botWorld);
-                                
-                                if topScreen.Z > 0 or botScreen.Z > 0 then
-                                    anyValid = true;
-                                    minX = math.min(minX, topScreen.X, botScreen.X);
-                                    maxX = math.max(maxX, topScreen.X, botScreen.X);
-                                    minY = math.min(minY, topScreen.Y, botScreen.Y);
-                                    maxY = math.max(maxY, topScreen.Y, botScreen.Y);
+                            if n == "Head" or n:find("Torso") or n:find("Leg") or n:find("Arm") or n:find("Foot") or n == "HumanoidRootPart" then
+                                local cf = part.CFrame;
+                                local size = part.Size * 0.5;
+
+                                local corners = {
+                                    cf * Vector3.new(-size.X,  size.Y, -size.Z),
+                                    cf * Vector3.new( size.X,  size.Y, -size.Z),
+                                    cf * Vector3.new(-size.X, -size.Y, -size.Z),
+                                    cf * Vector3.new( size.X, -size.Y, -size.Z),
+                                    cf * Vector3.new(-size.X,  size.Y,  size.Z),
+                                    cf * Vector3.new( size.X,  size.Y,  size.Z),
+                                    cf * Vector3.new(-size.X, -size.Y,  size.Z),
+                                    cf * Vector3.new( size.X, -size.Y,  size.Z),
+                                };
+
+                                for i = 1, 8 do
+                                    local screenPos, onScreen = Camera:WorldToViewportPoint(corners[i]);
+                                    if screenPos.Z > 0 then
+                                        validPoints = true;
+                                        minX = math.min(minX, screenPos.X);
+                                        maxX = math.max(maxX, screenPos.X);
+                                        minY = math.min(minY, screenPos.Y);
+                                        maxY = math.max(maxY, screenPos.Y);
+                                    end
                                 end
                             end
                         end
                     end
 
-                    if anyValid then
+                    if validPoints then
                         shouldHide = false;
 
-                        local height = math.max(maxY - minY, 20);
-                        local width = height * 0.55;
-                        local rootScreen = Camera:WorldToViewportPoint(rootPart.Position);
-                        local x = rootScreen.X - (width / 2);
+                        local width = maxX - minX;
+                        local height = maxY - minY;
+                        local x = minX;
                         local y = minY;
 
                         cache.Box.Position = UDim2.new(0, x, 0, y);
