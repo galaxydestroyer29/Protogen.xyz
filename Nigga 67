@@ -1,4 +1,4 @@
--- Universal Box ESP & Chams (Players + NPCs) - Native UI Engine (8-Corner 3D Projection & Inset Fixed)
+-- Universal Box ESP & Chams (Players + NPCs) - Native UI Engine (Raycast-Passthrough Fixed)
 -- Environment: Roblox Client (LocalScript)
 
 local CoreGui = game:GetService("CoreGui");
@@ -21,7 +21,7 @@ local ScreenGui = Instance.new("ScreenGui");
 ScreenGui.Name = "UniversalESP_Native";
 ScreenGui.ResetOnSpawn = false;
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling;
-ScreenGui.IgnoreGuiInset = true; -- Fixes the 36px topbar vertical drop (underground box glitch)
+ScreenGui.IgnoreGuiInset = true;
 
 pcall(function()
     local env = getgenv();
@@ -65,15 +65,19 @@ local function applyChams(character)
                 local clone = part:Clone();
                 clone.Name = "LayeredNeonChams";
                 clone:ClearAllChildren();
+                
+                -- Completely disable physical interactions, spatial queries, and raycast hits
                 clone.Anchored = false;
                 clone.CanCollide = false;
+                clone.CanTouch = false;
+                clone.CanQuery = false; -- Disables Workspace:Raycast / FindPartOnRay detection
                 clone.Massless = true;
+                clone.CastShadow = false;
                 
                 clone.Material = Enum.Material.Neon;
                 clone.Color = CONFIG.ChamsColor;
                 clone.Transparency = CONFIG.ChamsTransparency;
                 clone.Size = part.Size + Vector3.new(0.15, 0.15, 0.15);
-                clone.CastShadow = false;
                 
                 local highlight = Instance.new("Highlight");
                 highlight.Name = "ChamsHighlight";
@@ -304,7 +308,6 @@ RunService.RenderStepped:Connect(function()
                         applyChams(character);
                     end
 
-                    -- 8-Corner 3D Projection over core anatomical parts
                     local minX, minY = math.huge, math.huge;
                     local maxX, maxY = -math.huge, -math.huge;
                     local validPoints = false;
