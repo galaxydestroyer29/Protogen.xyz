@@ -1,0 +1,569 @@
+
+print("[AimSystem] Execution started.")
+
+local success, initError = pcall(function()
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+    local UserInputService = game:GetService("UserInputService")
+    local Workspace = game:GetService("Workspace")
+    local Camera = Workspace.CurrentCamera
+
+    local LocalPlayer = Players.LocalPlayer
+    if not LocalPlayer then
+        local playerAddedConnection
+        playerAddedConnection = Players.PlayerAdded:Connect(function(p)
+            if p == Players.LocalPlayer then
+                LocalPlayer = p
+                playerAddedConnection:Disconnect()
+            end
+        end)
+        repeat task.wait() until Players.LocalPlayer
+        LocalPlayer = Players.LocalPlayer
+    end
+
+    if not Camera then
+        Workspace:GetPropertyChangedSignal("CurrentCamera"):Wait()
+        Camera = Workspace.CurrentCamera
+    end
+
+    -- Configuration Table (Featuring Precise Ballistic Calculator)
+    local Settings = {
+        Enabled = false,           -- Hard Lock Aimbot Toggle
+        SilentEnabled = false,     -- Silent Aim Toggle
+        HbeEnabled = false,        -- Hitbox Expander Toggle
+        VisibilityCheck = false,   -- WallCheck Toggle
+        AimPart = "Head",          
+        FOVRadius = 70,            
+        ShowFOV = true,            
+        BulletSpeed = 2500,        -- Studs per second (Adjustable for projectile velocity)
+        GravityMultiplier = 1.0,   -- Fine-tunes parabolic drop compensation
+        VerticalDampening = 0.25,  -- Dampens erratic vertical velocity jitter
+    }
+
+    -- Hitbox Expander Configuration
+    local EXPANDED_SIZE = Vector3.new(10, 10, 10)
+    local ORIGINAL_SIZES = {}
+
+    -- Persistent Target Cache for Stickiness & Performance
+    local cachedTarget = nil
+    local ActiveTargets = {}
+
+    -- Optimized Background Target Refresher (Scans Workspace descendants & folders for NPCs/Players)
+    task.spawn(function()
+        while true do
+            pcall(function()
+                table.clear(ActiveTargets)
+                
+                for _, obj in ipairs(Workspace:GetDescendants()) do
+                    if obj:IsA("Model") and obj ~= LocalPlayer.Character then
+                        local humanoid = obj:FindFirstChildOfClass("Humanoid")
+                        local aimPart = obj:FindFirstChild(Settings.AimPart)
+                        if humanoid and humanoid.Health > 0 and aimPart then
+                            if not obj:IsDescendantOf(LocalPlayer.Character) then
+                                table.insert(ActiveTargets, obj)
+                            end
+                        end
+                    end
+                end
+            end)
+            task.wait(0.5)
+        end
+    end)
+
+    -- GUI Construction
+    local playerGui = LocalPlayer:WaitForChild("PlayerGui", 10)
+    if not playerGui then
+        error("PlayerGui could not be found!")
+    end
+
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "ClientAimSystemGui"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.IgnoreGuiInset = true
+    ScreenGui.Parent = playerGui
+
+    -- Top Left Control Container (Sized for 4 buttons)
+    local ControlContainer = Instance.new("Frame")
+    ControlContainer.Name = "ControlContainer"
+    ControlContainer.Position = UDim2.new(0, 15, 0, 15)
+    ControlContainer.Size = UDim2.new(0, 160, 0, 154)
+    ControlContainer.BackgroundTransparency = 1
+    ControlContainer.Parent = ScreenGui
+
+    local UIListLayout = Instance.new("UIListLayout")
+    UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    UIListLayout.Padding = UDim.new(0, 6)
+    UIListLayout.Parent = ControlContainer
+
+    local function CreateButton(name, text, layoutOrder)
+        local btn = Instance.new("TextButton")
+        btn.Name = name
+        btn.LayoutOrder = layoutOrder
+        btn.Size = UDim2.new(1, 0, 0, 34)
+        btn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+        btn.BackgroundTransparency = 0.3
+        btn.TextColor3 = Color3.fromRGB(240, 240, 240)
+        btn.TextSize = 13
+        btn.Font = Enum.Font.GothamSemibold
+        btn.Text = text
+        btn.AutoButtonColor = true
+
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 6)
+        corner.Parent = btn
+
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = Color3.fromRGB(60, 60, 60)
+        stroke.Thickness = 1
+        stroke.Transparency = 0.5
+        stroke.Parent = btn
+
+        btn.Parent = ControlContainer
+        return btn
+    end
+
+    local ActivationButton = CreateButton("ActivationButton", "Aim: OFF", 1)
+    local SilentButton = CreateButton("SilentButton", "Silent: OFF", 2)
+    local HbeButton = CreateButton("HbeButton", "HBE: OFF", 3)
+    local VisibilityButton = CreateButton("VisibilityButton", "WallCheck: OFF", 4)
+
+    -- FOV Circle Frame
+    local FOVFrame = Instance.new("Frame")
+    FOVFrame.Name = "FOVCircle"
+    FOVFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+    FOVFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+    FOVFrame.Size = UDim2.new(0, Settings.FOVRadius * 2, 0, Settings.FOVRadius * 2)
+    FOVFrame.BackgroundTransparency = 0.92
+    FOVFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    FOVFrame.BorderSizePixel = 0
+    FOVFrame.Parent = ScreenGui
+
+    local UICorner = Instance.new("UICorner")
+    UICorner.CornerRadius = UDim.new(1, 0)
+    UICorner.Parent = FOVFrame
+
+    local UIStroke = Instance.new("UIStroke")
+    UIStroke.Name = "WhiteGlowStroke"
+    UIStroke.Color = Color3.fromRGB(255, 255, 255)
+    UIStroke.Thickness = 2.5
+    UIStroke.Transparency = 0.25
+    UIStroke.Parent = FOVFrame
+
+    -- Silent Aim Tracer Line
+    local TracerLine = Instance.new("Frame")
+    TracerLine.Name = "TracerLine"
+    TracerLine.AnchorPoint = Vector2.new(0, 0.5)
+    TracerLine.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    TracerLine.BackgroundTransparency = 0.3
+    TracerLine.BorderSizePixel = 0
+    TracerLine.Size = UDim2.new(0, 0, 0, 0.7)
+    TracerLine.Visible = false
+    TracerLine.Parent = ScreenGui
+
+    -- Red Target Indicator Circle (Floats above active target)
+    local TargetIndicatorCircle = Instance.new("Frame")
+    TargetIndicatorCircle.Name = "TargetIndicatorCircle"
+    TargetIndicatorCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+    TargetIndicatorCircle.Size = UDim2.new(0, 16, 0, 16)
+    TargetIndicatorCircle.BackgroundColor3 = Color3.fromRGB(255, 45, 45)
+    TargetIndicatorCircle.BackgroundTransparency = 0.2
+    TargetIndicatorCircle.Visible = false
+    TargetIndicatorCircle.Parent = ScreenGui
+
+    local CircleCorner = Instance.new("UICorner")
+    CircleCorner.CornerRadius = UDim.new(1, 0)
+    CircleCorner.Parent = TargetIndicatorCircle
+
+    local CircleStroke = Instance.new("UIStroke")
+    CircleStroke.Color = Color3.fromRGB(255, 255, 255)
+    CircleStroke.Thickness = 1.5
+    CircleStroke.Transparency = 0.2
+    CircleStroke.Parent = TargetIndicatorCircle
+
+    -- Status Telemetry Container
+    local StatusContainer = Instance.new("Frame")
+    StatusContainer.Name = "StatusContainer"
+    StatusContainer.AnchorPoint = Vector2.new(0.5, 0)
+    StatusContainer.Position = UDim2.new(0.5, 0, 0.5, Settings.FOVRadius + 12)
+    StatusContainer.Size = UDim2.new(0, 200, 0, 80)
+    StatusContainer.BackgroundTransparency = 1
+    StatusContainer.Visible = false
+    StatusContainer.Parent = ScreenGui
+
+    local StatusListLayout = Instance.new("UIListLayout")
+    StatusListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    StatusListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    StatusListLayout.Padding = UDim.new(0, 3)
+    StatusListLayout.Parent = StatusContainer
+
+    local function CreateBlandLabel(name, layoutOrder)
+        local lbl = Instance.new("TextLabel")
+        lbl.Name = name
+        lbl.LayoutOrder = layoutOrder
+        lbl.Size = UDim2.new(1, 0, 0, 22)
+        lbl.BackgroundTransparency = 1
+        lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+        lbl.TextSize = 15
+        lbl.Font = Enum.Font.SourceSansBold
+        lbl.TextXAlignment = Enum.TextXAlignment.Center
+        lbl.Parent = StatusContainer
+        return lbl
+    end
+
+    local HealthLabel = CreateBlandLabel("HealthLabel", 1)
+    local WeaponLabel = CreateBlandLabel("WeaponLabel", 2)
+    local VisibleLabel = CreateBlandLabel("VisibleLabel", 3)
+
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    raycastParams.IgnoreWater = true
+
+    -- Hitbox Expander Update Function
+    local function updateHitboxes()
+        for _, char in ipairs(ActiveTargets) do
+            local root = char:FindFirstChild(Settings.AimPart)
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            
+            if root and humanoid and humanoid.Health > 0 then
+                if Settings.HbeEnabled then
+                    if not ORIGINAL_SIZES[char] then
+                        ORIGINAL_SIZES[char] = root.Size
+                    end
+                    root.Size = EXPANDED_SIZE
+                    root.CanCollide = false
+                    root.Transparency = 0.65
+                else
+                    if ORIGINAL_SIZES[char] then
+                        root.Size = ORIGINAL_SIZES[char]
+                        root.Transparency = 1 
+                        root.CanCollide = true
+                    end
+                end
+            end
+        end
+    end
+
+    -- Button Logic & Mutual Exclusivity
+    ActivationButton.MouseButton1Click:Connect(function()
+        Settings.Enabled = not Settings.Enabled
+        if Settings.Enabled then
+            Settings.SilentEnabled = false
+            SilentButton.Text = "Silent: OFF"
+            SilentButton.UIStroke.Color = Color3.fromRGB(60, 60, 60)
+
+            ActivationButton.Text = "Aim: ON"
+            ActivationButton.UIStroke.Color = Color3.fromRGB(255, 255, 255)
+            Settings.FOVRadius = 70
+        else
+            ActivationButton.Text = "Aim: OFF"
+            ActivationButton.UIStroke.Color = Color3.fromRGB(60, 60, 60)
+            TargetIndicatorCircle.Visible = false
+            StatusContainer.Visible = false
+        end
+    end)
+
+    SilentButton.MouseButton1Click:Connect(function()
+        Settings.SilentEnabled = not Settings.SilentEnabled
+        if Settings.SilentEnabled then
+            Settings.Enabled = false
+            ActivationButton.Text = "Aim: OFF"
+            ActivationButton.UIStroke.Color = Color3.fromRGB(60, 60, 60)
+            TargetIndicatorCircle.Visible = false
+
+            SilentButton.Text = "Silent: ON"
+            SilentButton.UIStroke.Color = Color3.fromRGB(255, 255, 255)
+            Settings.FOVRadius = 200
+        else
+            SilentButton.Text = "Silent: OFF"
+            SilentButton.UIStroke.Color = Color3.fromRGB(60, 60, 60)
+            StatusContainer.Visible = false
+            TracerLine.Visible = false
+            cachedTarget = nil
+        end
+    end)
+
+    HbeButton.MouseButton1Click:Connect(function()
+        Settings.HbeEnabled = not Settings.HbeEnabled
+        if Settings.HbeEnabled then
+            HbeButton.Text = "HBE: ON"
+            HbeButton.UIStroke.Color = Color3.fromRGB(255, 255, 255)
+        else
+            HbeButton.Text = "HBE: OFF"
+            HbeButton.UIStroke.Color = Color3.fromRGB(60, 60, 60)
+            updateHitboxes()
+            ORIGINAL_SIZES = {}
+        end
+    end)
+
+    VisibilityButton.MouseButton1Click:Connect(function()
+        Settings.VisibilityCheck = not Settings.VisibilityCheck
+        if Settings.VisibilityCheck then
+            VisibilityButton.Text = "WallCheck: ON"
+            VisibilityButton.UIStroke.Color = Color3.fromRGB(255, 255, 255)
+        else
+            VisibilityButton.Text = "WallCheck: OFF"
+            VisibilityButton.UIStroke.Color = Color3.fromRGB(60, 60, 60)
+        end
+    end)
+
+    local function IsTargetVisible(targetPart, character)
+        local localChar = LocalPlayer.Character
+        if not localChar then return false end
+
+        raycastParams.FilterDescendantsInstances = {localChar, character}
+        local origin = Camera.CFrame.Position
+        local direction = (targetPart.Position - origin)
+
+        local result = Workspace:Raycast(origin, direction, raycastParams)
+        return result == nil
+    end
+
+    local function GetTargetWeapon(character)
+        local scanSuccess, weaponName = pcall(function()
+            local tool = character:FindFirstChildOfClass("Tool")
+            if tool then return tool.Name end
+
+            for _, child in ipairs(character:GetChildren()) do
+                if child:IsA("Model") or child:IsA("Folder") then
+                    local nameLower = child.Name:lower()
+                    if nameLower:find("weapon") or nameLower:find("gun") or nameLower:find("equip") then
+                        local innerTool = child:FindFirstChildOfClass("Tool") or child:GetChildren()[1]
+                        if innerTool then return innerTool.Name end
+                    end
+                end
+            end
+
+            if character:GetAttribute("Weapon") then
+                return tostring(character:GetAttribute("Weapon"))
+            end
+
+            return "NPC / Unarmed"
+        end)
+
+        return (scanSuccess and weaponName) or "NPC / Unarmed"
+    end
+
+    -- Precise Ballistic Prediction Calculator
+    -- Eliminates close-range overshooting via smooth linear distance scale-down,
+    -- and prevents long-range undershooting via accurate travel-time and parabolic gravity compensation.
+    local function CalculateBallisticPrediction(targetPart)
+        if not targetPart then return Vector3.zero end
+
+        local targetPos = targetPart.Position
+        local localPos = Camera.CFrame.Position
+        local distance = (targetPos - localPos).Magnitude
+
+        local rawVelocity = targetPart.AssemblyLinearVelocity or Vector3.zero
+        local adjustedVelocity = Vector3.new(rawVelocity.X, rawVelocity.Y * Settings.VerticalDampening, rawVelocity.Z)
+
+        -- Travel time calculation based on bullet velocity
+        local travelTime = distance / Settings.BulletSpeed
+
+        -- Smooth close-range damping (scales down travel time proportionally under 15 studs to eliminate jitter/overshoot)
+        if distance < 15 then
+            travelTime = travelTime * (distance / 15)
+        end
+
+        -- Velocity lead prediction
+        local predictedPos = targetPos + (adjustedVelocity * travelTime)
+
+        -- Quadratic parabolic gravity drop compensation (Workspace.Gravity * t^2)
+        local gravityDrop = 0.5 * Workspace.Gravity * (travelTime ^ 2) * Settings.GravityMultiplier
+        predictedPos = predictedPos + Vector3.new(0, gravityDrop, 0)
+
+        return predictedPos
+    end
+
+    -- Ultra-fast Targeting using Cached List
+    local function GetClosestTargetToCrosshair()
+        local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        
+        -- Verify cached target for rock-solid stability
+        if cachedTarget and cachedTarget.Parent then
+            local character = cachedTarget.Parent
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                local finalPrediction = CalculateBallisticPrediction(cachedTarget)
+                local screenPos, onScreen = Camera:WorldToViewportPoint(finalPrediction)
+                
+                if onScreen then
+                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
+                    if dist <= Settings.FOVRadius and (not Settings.VisibilityCheck or IsTargetVisible(cachedTarget, character)) then
+                        return cachedTarget, finalPrediction, character
+                    end
+                end
+            end
+        end
+
+        local closestTarget = nil
+        local shortestScreenDistance = math.huge
+        local predictedTargetPosition = nil
+        local targetCharacter = nil
+
+        for _, character in ipairs(ActiveTargets) do
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            local targetPart = character:FindFirstChild(Settings.AimPart)
+
+            if humanoid and humanoid.Health > 0 and targetPart then
+                local finalPrediction = CalculateBallisticPrediction(targetPart)
+                local screenPosition, onScreen = Camera:WorldToViewportPoint(finalPrediction)
+                
+                if onScreen then
+                    local targetScreenVector = Vector2.new(screenPosition.X, screenPosition.Y)
+                    local distanceFromCenter = (targetScreenVector - screenCenter).Magnitude
+
+                    if distanceFromCenter <= Settings.FOVRadius then
+                        if not Settings.VisibilityCheck or IsTargetVisible(targetPart, character) then
+                            if distanceFromCenter < shortestScreenDistance then
+                                shortestScreenDistance = distanceFromCenter
+                                closestTarget = targetPart
+                                predictedTargetPosition = finalPrediction
+                                targetCharacter = character
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        cachedTarget = closestTarget
+        return closestTarget, predictedTargetPosition, targetCharacter
+    end
+
+    -- Silent Aim Module Hook Integration (Supporting Modern & Legacy Raycasts)
+    local currentSilentTargetPos = nil
+    local getTargetPosition = function()
+        if Settings.SilentEnabled then
+            return currentSilentTargetPos
+        end
+        return nil
+    end
+
+    local env = (getgenv and getgenv()) or _G or {}
+    local safeHookMeta = env.hookmetamethod or hookmetamethod
+    local safeGetNamecall = env.getnamecallmethod or getnamecallmethod
+    local safeCheckCaller = env.checkcaller or checkcaller or function() return false end
+
+    if safeHookMeta and safeGetNamecall then
+        pcall(function()
+            local oldNamecall
+            oldNamecall = safeHookMeta(game, "__namecall", function(self, ...)
+                local method = safeGetNamecall()
+                local args = {...}
+
+                if not safeCheckCaller() then
+                    local targetPos = getTargetPosition()
+                    if targetPos then
+                        if method == "Raycast" and self == Workspace then
+                            local origin = args[1]
+                            local direction = args[2]
+                            args[2] = (targetPos - origin).Unit * direction.Magnitude
+                            return oldNamecall(self, unpack(args))
+                        elseif method == "FindPartOnRay" and self == Workspace then
+                            local ray = args[1]
+                            local origin = ray.Origin
+                            local direction = ray.Direction
+                            args[1] = Ray.new(origin, (targetPos - origin).Unit * direction.Magnitude)
+                            return oldNamecall(self, unpack(args))
+                        elseif (method == "ScreenPointToRay" or method == "ViewportPointToRay") and (self == Workspace.CurrentCamera or self:IsA("Camera")) then
+                            local camera = Workspace.CurrentCamera
+                            local origin = camera and camera.CFrame.Position or Vector3.zero
+                            local dir = (targetPos - origin).Unit * 1000
+                            return Ray.new(origin, dir)
+                        end
+                    end
+                end
+
+                return oldNamecall(self, ...)
+            end)
+        end)
+    end
+
+    -- Optimized Render Loop
+    RunService.RenderStepped:Connect(function()
+        updateHitboxes()
+
+        local activeMode = Settings.Enabled or Settings.SilentEnabled
+        FOVFrame.Size = UDim2.new(0, Settings.FOVRadius * 2, 0, Settings.FOVRadius * 2)
+        FOVFrame.Visible = Settings.ShowFOV and activeMode
+        StatusContainer.Position = UDim2.new(0.5, 0, 0.5, Settings.FOVRadius + 12)
+
+        local targetPart, predictedPos, targetChar = nil, nil, nil
+
+        if activeMode then
+            targetPart, predictedPos, targetChar = GetClosestTargetToCrosshair()
+        end
+
+        if Settings.SilentEnabled then
+            currentSilentTargetPos = predictedPos
+        else
+            currentSilentTargetPos = nil
+        end
+
+        -- Tracer Line Handling
+        if Settings.SilentEnabled and predictedPos and targetPart then
+            local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+            local screenPos, onScreen = Camera:WorldToViewportPoint(predictedPos)
+            if onScreen then
+                local targetVec = Vector2.new(screenPos.X, screenPos.Y)
+                local distance = (targetVec - screenCenter).Magnitude
+                if distance > 2 then
+                    local angle = math.deg(math.atan2(targetVec.Y - screenCenter.Y, targetVec.X - screenCenter.X))
+                    TracerLine.Position = UDim2.new(0, screenCenter.X, 0, screenCenter.Y)
+                    TracerLine.Size = UDim2.new(0, distance, 0, 0.7)
+                    TracerLine.Rotation = angle
+                    TracerLine.Visible = true
+                else
+                    TracerLine.Visible = false
+                end
+            else
+                TracerLine.Visible = false
+            end
+        else
+            TracerLine.Visible = false
+        end
+
+        if targetPart and predictedPos and targetChar then
+            local screenPos, onScreen = Camera:WorldToViewportPoint(predictedPos)
+            
+            if onScreen then
+                -- Position red circle floating directly above the target's head
+                TargetIndicatorCircle.Position = UDim2.new(0, screenPos.X, 0, screenPos.Y - 28)
+                TargetIndicatorCircle.Visible = true
+
+                local humanoid = targetChar:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    HealthLabel.Text = "Health : " .. math.floor(humanoid.Health)
+                end
+
+                WeaponLabel.Text = "Weapon : " .. GetTargetWeapon(targetChar)
+
+                if IsTargetVisible(targetPart, targetChar) then
+                    VisibleLabel.Text = "Visible : True"
+                    VisibleLabel.TextColor3 = Color3.fromRGB(46, 204, 113)
+                else
+                    VisibleLabel.Text = "Visible : False"
+                    VisibleLabel.TextColor3 = Color3.fromRGB(231, 76, 60)
+                end
+                StatusContainer.Visible = true
+            else
+                TargetIndicatorCircle.Visible = false
+                StatusContainer.Visible = false
+            end
+
+            if Settings.Enabled then
+                Camera.CFrame = CFrame.new(Camera.CFrame.Position, predictedPos)
+            end
+        else
+            TargetIndicatorCircle.Visible = false
+            StatusContainer.Visible = false
+            currentSilentTargetPos = nil
+        end
+    end)
+
+    print("[AimSystem] Loaded successfully: Precise ballistic calculator active!")
+end)
+
+if not success then
+    warn("[AimSystem Error]: " .. tostring(initError))
+end
