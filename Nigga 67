@@ -1,4 +1,4 @@
--- Universal Box ESP & Chams (Players + NPCs) - Native UI Engine
+-- Universal Box ESP & Chams (Players + NPCs) - Native UI Engine (Root-Centered & Locked)
 -- Environment: Roblox Client (LocalScript)
 
 local CoreGui = game:GetService("CoreGui");
@@ -303,23 +303,19 @@ RunService.RenderStepped:Connect(function()
                         applyChams(character);
                     end
 
-                    -- Use stable RootPart-relative world anchors to prevent sinking or offset bugs
+                    -- Force locked root-centered screen projection
                     local rootPos = rootPart.Position;
-                    local topWorld = rootPos + Vector3.new(0, 2.6, 0);
-                    local bottomWorld = rootPos - Vector3.new(0, 2.7, 0);
+                    local rootScreen, onScreen = Camera:WorldToViewportPoint(rootPos);
 
-                    local topScreen, topVisible = Camera:WorldToViewportPoint(topWorld);
-                    local bottomScreen, bottomVisible = Camera:WorldToViewportPoint(bottomWorld);
-
-                    if topVisible or bottomVisible then
+                    if rootScreen.Z > 0 then
                         shouldHide = false;
 
-                        local height = math.abs(bottomScreen.Y - topScreen.Y);
-                        local width = height / 1.7;
+                        local distance = (camPos - rootPos).Magnitude;
+                        local height = math.clamp(3000 / distance, 15, 1200);
+                        local width = height * 0.55;
 
-                        local centerScreen = Camera:WorldToViewportPoint(rootPos);
-                        local x = centerScreen.X - (width / 2);
-                        local y = topScreen.Y;
+                        local x = rootScreen.X - (width / 2);
+                        local y = rootScreen.Y - (height / 2);
 
                         cache.Box.Position = UDim2.new(0, x, 0, y);
                         cache.Box.Size = UDim2.new(0, width, 0, height);
@@ -354,8 +350,8 @@ RunService.RenderStepped:Connect(function()
                         end
 
                         if CONFIG.DistanceEnabled then
-                            local distance = (camPos - rootPos).Magnitude;
-                            cache.DistanceText.Text = math.floor(distance) .. "m";
+                            local distanceVal = math.floor(distance);
+                            cache.DistanceText.Text = distanceVal .. "m";
                             cache.DistanceText.Position = UDim2.new(0, x + (width / 2) - 50, 0, y + height + 3);
                             cache.DistanceText.Size = UDim2.new(0, 100, 0, 15);
                             cache.DistanceText.Visible = true;
