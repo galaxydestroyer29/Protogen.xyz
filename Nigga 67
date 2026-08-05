@@ -1,5 +1,5 @@
 --[[\
-    Universal Box ESP & Chams (Players + NPCs) - Native UI Engine (Fixed Head/Root Positioning)
+    Universal Box ESP & Chams (Players + NPCs) - Native UI Engine (Dynamic Bounds & Safe Globals)
     Environment: Roblox Client (LocalScript)
 ]]--
 
@@ -25,8 +25,9 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 pcall(function()
-    if syn and syn.protect_gui then
-        syn.protect_gui(ScreenGui)
+    local envSyn = getgenv().syn
+    if envSyn and envSyn.protect_gui then
+        envSyn.protect_gui(ScreenGui)
         ScreenGui.Parent = CoreGui
     elseif gethui then
         ScreenGui.Parent = gethui()
@@ -299,9 +300,8 @@ RunService.RenderStepped:Connect(function()
         if character and character:FindFirstChild("HumanoidRootPart") and character.Parent then
             local humanoid = character:FindFirstChildOfClass("Humanoid")
             local rootPart = character:FindFirstChild("HumanoidRootPart")
-            local head = character:FindFirstChild("Head")
             
-            if humanoid and humanoid.Health > 0 and rootPart and head then
+            if humanoid and humanoid.Health > 0 and rootPart then
                 local passTeamCheck = true
                 if typeof(key) == "Instance" and key:IsA("Player") then
                     if CONFIG.TeamCheck and key.Team == LocalPlayer.Team then
@@ -314,9 +314,26 @@ RunService.RenderStepped:Connect(function()
                         applyChams(character)
                     end
 
-                    -- Precise bounds using Head and RootPart
-                    local topWorld = head.Position + Vector3.new(0, 0.6, 0)
-                    local bottomWorld = rootPart.Position - Vector3.new(0, 2.7, 0)
+                    -- Dynamically scan exact top (head/hats) and bottom (feet) bounds
+                    local minY = math.huge
+                    local maxY = -math.huge
+
+                    for _, p in ipairs(character:GetDescendants()) do
+                        if p:IsA("BasePart") then
+                            local pTop = p.Position.Y + (p.Size.Y / 2)
+                            local pBottom = p.Position.Y - (p.Size.Y / 2)
+                            if pTop > maxY then maxY = pTop end
+                            if pBottom < minY then minY = pBottom end
+                        end
+                    end
+
+                    if minY == math.huge or maxY == -math.huge then
+                        maxY = rootPart.Position.Y + 3
+                        minY = rootPart.Position.Y - 3
+                    end
+
+                    local topWorld = Vector3.new(rootPart.Position.X, maxY + 0.1, rootPart.Position.Z)
+                    local bottomWorld = Vector3.new(rootPart.Position.X, minY - 0.1, rootPart.Position.Z)
 
                     local topScreen, topVisible = Camera:WorldToViewportPoint(topWorld)
                     local bottomScreen, bottomVisible = Camera:WorldToViewportPoint(bottomWorld)
@@ -325,7 +342,7 @@ RunService.RenderStepped:Connect(function()
                         shouldHide = false
 
                         local height = math.abs(bottomScreen.Y - topScreen.Y)
-                        local width = height / 2
+                        local width = height / 1.7
 
                         local centerScreen = Camera:WorldToViewportPoint(rootPart.Position)
                         local x = centerScreen.X - (width / 2)
