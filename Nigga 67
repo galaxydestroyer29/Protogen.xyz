@@ -1,5 +1,5 @@
 --[[\
-    Universal Box ESP & Chams (Players + NPCs) - Native UI Engine (Bypasses Drawing Library)
+    Universal Box ESP & Chams (Players + NPCs) - Native UI Engine (Fixed World-Space Bounding Box)
     Environment: Roblox Client (LocalScript)
 ]]--
 
@@ -317,8 +317,9 @@ RunService.RenderStepped:Connect(function()
                     local cframe, size = character:GetBoundingBox()
                     size = size * CONFIG.BoxScale
 
-                    local topPosition = (cframe + Vector3.new(0, size.Y / 2, 0)).Position
-                    local bottomPosition = (cframe - Vector3.new(0, size.Y / 2, 0)).Position
+                    local centerPos = cframe.Position
+                    local topPosition = centerPos + Vector3.new(0, size.Y / 2, 0)
+                    local bottomPosition = centerPos - Vector3.new(0, size.Y / 2, 0)
 
                     local topScreen, topVisible = Camera:WorldToViewportPoint(topPosition)
                     local bottomScreen, bottomVisible = Camera:WorldToViewportPoint(bottomPosition)
@@ -329,7 +330,7 @@ RunService.RenderStepped:Connect(function()
                         local height = math.abs(bottomScreen.Y - topScreen.Y)
                         local width = height / 1.7
 
-                        local centerScreen = Camera:WorldToViewportPoint(cframe.Position)
+                        local centerScreen = Camera:WorldToViewportPoint(centerPos)
                         local x = centerScreen.X - (width / 2)
                         local y = topScreen.Y
 
