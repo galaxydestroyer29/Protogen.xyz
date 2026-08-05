@@ -1,5 +1,5 @@
 --[[\
-    Universal Box ESP & Chams (Players + NPCs) - Native UI Engine (Fixed World-Space Bounding Box)
+    Universal Box ESP & Chams (Players + NPCs) - Native UI Engine (Fixed Head/Root Positioning)
     Environment: Roblox Client (LocalScript)
 ]]--
 
@@ -41,7 +41,6 @@ local CONFIG = {
     BoxColor = Color3.fromRGB(0, 240, 255),     -- Vibrant Cyan Box
     GlowColor = Color3.fromRGB(10, 10, 20),     -- Deep Dark Shadow/Glow
     TeamCheck = false,
-    BoxScale = 1.15,
     
     -- Chams Configuration
     ChamsEnabled = true,
@@ -300,8 +299,9 @@ RunService.RenderStepped:Connect(function()
         if character and character:FindFirstChild("HumanoidRootPart") and character.Parent then
             local humanoid = character:FindFirstChildOfClass("Humanoid")
             local rootPart = character:FindFirstChild("HumanoidRootPart")
+            local head = character:FindFirstChild("Head")
             
-            if humanoid and humanoid.Health > 0 and rootPart then
+            if humanoid and humanoid.Health > 0 and rootPart and head then
                 local passTeamCheck = true
                 if typeof(key) == "Instance" and key:IsA("Player") then
                     if CONFIG.TeamCheck and key.Team == LocalPlayer.Team then
@@ -314,23 +314,20 @@ RunService.RenderStepped:Connect(function()
                         applyChams(character)
                     end
 
-                    local cframe, size = character:GetBoundingBox()
-                    size = size * CONFIG.BoxScale
+                    -- Precise bounds using Head and RootPart
+                    local topWorld = head.Position + Vector3.new(0, 0.6, 0)
+                    local bottomWorld = rootPart.Position - Vector3.new(0, 2.7, 0)
 
-                    local centerPos = cframe.Position
-                    local topPosition = centerPos + Vector3.new(0, size.Y / 2, 0)
-                    local bottomPosition = centerPos - Vector3.new(0, size.Y / 2, 0)
-
-                    local topScreen, topVisible = Camera:WorldToViewportPoint(topPosition)
-                    local bottomScreen, bottomVisible = Camera:WorldToViewportPoint(bottomPosition)
+                    local topScreen, topVisible = Camera:WorldToViewportPoint(topWorld)
+                    local bottomScreen, bottomVisible = Camera:WorldToViewportPoint(bottomWorld)
 
                     if topVisible or bottomVisible then
                         shouldHide = false
 
                         local height = math.abs(bottomScreen.Y - topScreen.Y)
-                        local width = height / 1.7
+                        local width = height / 2
 
-                        local centerScreen = Camera:WorldToViewportPoint(centerPos)
+                        local centerScreen = Camera:WorldToViewportPoint(rootPart.Position)
                         local x = centerScreen.X - (width / 2)
                         local y = topScreen.Y
 
