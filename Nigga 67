@@ -1,4 +1,4 @@
--- Universal Box ESP & Chams (Players + NPCs) - Native UI Engine (Root-Centered & Locked)
+-- Universal Box ESP & Chams (Players + NPCs) - Native UI Engine (Anatomical Core Bounds)
 -- Environment: Roblox Client (LocalScript)
 
 local CoreGui = game:GetService("CoreGui");
@@ -303,19 +303,43 @@ RunService.RenderStepped:Connect(function()
                         applyChams(character);
                     end
 
-                    -- Force locked root-centered screen projection
-                    local rootPos = rootPart.Position;
-                    local rootScreen, onScreen = Camera:WorldToViewportPoint(rootPos);
+                    -- Target core anatomical parts strictly (Excludes tools, weapons, hair, & accessories)
+                    local minX, minY = math.huge, math.huge;
+                    local maxX, maxY = -math.huge, -math.huge;
+                    local anyValid = false;
 
-                    if rootScreen.Z > 0 then
+                    for _, part in ipairs(character:GetChildren()) do
+                        if part:IsA("BasePart") then
+                            local n = part.Name;
+                            if n == "Head" or n:find("Torso") or n:find("Leg") or n:find("Foot") or n == "HumanoidRootPart" then
+                                local pPos = part.Position;
+                                local pSize = part.Size;
+                                
+                                local topWorld = pPos + Vector3.new(0, pSize.Y / 2, 0);
+                                local botWorld = pPos - Vector3.new(0, pSize.Y / 2, 0);
+                                
+                                local topScreen, topVis = Camera:WorldToViewportPoint(topWorld);
+                                local botScreen, botVis = Camera:WorldToViewportPoint(botWorld);
+                                
+                                if topScreen.Z > 0 or botScreen.Z > 0 then
+                                    anyValid = true;
+                                    minX = math.min(minX, topScreen.X, botScreen.X);
+                                    maxX = math.max(maxX, topScreen.X, botScreen.X);
+                                    minY = math.min(minY, topScreen.Y, botScreen.Y);
+                                    maxY = math.max(maxY, topScreen.Y, botScreen.Y);
+                                end
+                            end
+                        end
+                    end
+
+                    if anyValid then
                         shouldHide = false;
 
-                        local distance = (camPos - rootPos).Magnitude;
-                        local height = math.clamp(3000 / distance, 15, 1200);
+                        local height = math.max(maxY - minY, 20);
                         local width = height * 0.55;
-
+                        local rootScreen = Camera:WorldToViewportPoint(rootPart.Position);
                         local x = rootScreen.X - (width / 2);
-                        local y = rootScreen.Y - (height / 2);
+                        local y = minY;
 
                         cache.Box.Position = UDim2.new(0, x, 0, y);
                         cache.Box.Size = UDim2.new(0, width, 0, height);
@@ -350,8 +374,8 @@ RunService.RenderStepped:Connect(function()
                         end
 
                         if CONFIG.DistanceEnabled then
-                            local distanceVal = math.floor(distance);
-                            cache.DistanceText.Text = distanceVal .. "m";
+                            local distance = (camPos - rootPart.Position).Magnitude;
+                            cache.DistanceText.Text = math.floor(distance) .. "m";
                             cache.DistanceText.Position = UDim2.new(0, x + (width / 2) - 50, 0, y + height + 3);
                             cache.DistanceText.Size = UDim2.new(0, 100, 0, 15);
                             cache.DistanceText.Visible = true;
