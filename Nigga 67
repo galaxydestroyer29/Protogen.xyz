@@ -1,13 +1,9 @@
+--[[\
+    Universal Box ESP & Chams (Players + NPCs) - Native UI Engine (Bypasses Drawing Library)
+    Environment: Roblox Client (LocalScript)
+]]--
 
-
--- Prevent duplicate execution stacking in real executors
-if getgenv()._UniversalESPConnection then
-    pcall(function()
-        getgenv()._UniversalESPConnection:Disconnect()
-    end)
-    getgenv()._UniversalESPConnection = nil
-end
-
+local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -15,35 +11,50 @@ local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
+-- Prevent duplicate execution stacking
+if getgenv()._UniversalESPUI then
+    pcall(function()
+        getgenv()._UniversalESPUI:Destroy()
+    end)
+    getgenv()._UniversalESPUI = nil
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "UniversalESP_Native"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+pcall(function()
+    if syn and syn.protect_gui then
+        syn.protect_gui(ScreenGui)
+        ScreenGui.Parent = CoreGui
+    elseif gethui then
+        ScreenGui.Parent = gethui()
+    else
+        ScreenGui.Parent = CoreGui
+    end
+end)
+
+getgenv()._UniversalESPUI = ScreenGui
+
 local CONFIG = {
-    BoxColor = Color3.fromRGB(0, 240, 255),
-    GlowColor = Color3.fromRGB(10, 10, 20),
-    BoxThickness = 1,
-    GlowThickness = 3,
+    BoxColor = Color3.fromRGB(0, 240, 255),     -- Vibrant Cyan Box
+    GlowColor = Color3.fromRGB(10, 10, 20),     -- Deep Dark Shadow/Glow
     TeamCheck = false,
-    BaseZIndex = 5,
     BoxScale = 1.15,
+    
+    -- Chams Configuration
     ChamsEnabled = true,
     ChamsColor = Color3.fromRGB(0, 240, 255),
     ChamsTransparency = 0.12,
+    
+    -- UI Elements
     HealthBarEnabled = true,
     NameEnabled = true,
-    NameColor = Color3.fromRGB(255, 255, 255),
-    NameSize = 12,
     DistanceEnabled = true,
-    DistanceColor = Color3.fromRGB(160, 180, 200),
-    DistanceSize = 11,
 }
 
 local espCache = {}
-
-local function createDrawing(className, properties)
-    local drawing = Drawing.new(className)
-    for property, value in pairs(properties) do
-        drawing[property] = value
-    end
-    return drawing
-end
 
 local function applyChams(character)
     if not CONFIG.ChamsEnabled then return end
@@ -94,32 +105,103 @@ local function removeChams(character)
     end
 end
 
-local function createEntityCache()
+local function createEntityUI()
+    local container = Instance.new("Folder")
+    container.Name = "EntityESP"
+    container.Parent = ScreenGui
+
+    -- Outer Glow / Shadow
+    local glow = Instance.new("Frame")
+    glow.Name = "Glow"
+    glow.BackgroundTransparency = 1
+    glow.Visible = false
+    glow.Parent = container
+
+    local glowStroke = Instance.new("UIStroke")
+    glowStroke.Color = CONFIG.GlowColor
+    glowStroke.Thickness = 3
+    glowStroke.Parent = glow
+
+    -- Box Frame
+    local box = Instance.new("Frame")
+    box.Name = "Box"
+    box.BackgroundTransparency = 1
+    box.Visible = false
+    box.Parent = container
+
+    local boxStroke = Instance.new("UIStroke")
+    boxStroke.Color = CONFIG.BoxColor
+    boxStroke.Thickness = 1
+    boxStroke.Parent = box
+
+    -- Vertical Left Healthbar Border
+    local healthBorder = Instance.new("Frame")
+    healthBorder.Name = "HealthBorder"
+    healthBorder.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    healthBorder.BorderSizePixel = 0
+    healthBorder.Visible = false
+    healthBorder.Parent = container
+
+    -- Healthbar Background
+    local healthBg = Instance.new("Frame")
+    healthBg.Name = "HealthBg"
+    healthBg.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+    healthBg.BackgroundTransparency = 0.15
+    healthBg.BorderSizePixel = 0
+    healthBg.Visible = false
+    healthBg.Parent = container
+
+    -- Healthbar Foreground Fill
+    local healthFill = Instance.new("Frame")
+    healthFill.Name = "HealthFill"
+    healthFill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    healthFill.BorderSizePixel = 0
+    healthFill.Visible = false
+    healthFill.Parent = container
+
+    -- Username Text
+    local nameText = Instance.new("TextLabel")
+    nameText.Name = "NameText"
+    nameText.BackgroundTransparency = 1
+    nameText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    nameText.TextStrokeTransparency = 0
+    nameText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    nameText.TextSize = 12
+    nameText.Font = Enum.Font.SourceSansBold
+    nameText.TextXAlignment = Enum.TextXAlignment.Center
+    nameText.Visible = false
+    nameText.Parent = container
+
+    -- Distance Text
+    local distanceText = Instance.new("TextLabel")
+    distanceText.Name = "DistanceText"
+    distanceText.BackgroundTransparency = 1
+    distanceText.TextColor3 = Color3.fromRGB(160, 180, 200)
+    distanceText.TextStrokeTransparency = 0
+    distanceText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    distanceText.TextSize = 11
+    distanceText.Font = Enum.Font.SourceSansBold
+    distanceText.TextXAlignment = Enum.TextXAlignment.Center
+    distanceText.Visible = false
+    distanceText.Parent = container
+
     return {
-        GlowTL = createDrawing("Line", { Visible = false, ZIndex = CONFIG.BaseZIndex, Thickness = CONFIG.GlowThickness, Color = CONFIG.GlowColor }),
-        GlowTR = createDrawing("Line", { Visible = false, ZIndex = CONFIG.BaseZIndex, Thickness = CONFIG.GlowThickness, Color = CONFIG.GlowColor }),
-        GlowBL = createDrawing("Line", { Visible = false, ZIndex = CONFIG.BaseZIndex, Thickness = CONFIG.GlowThickness, Color = CONFIG.GlowColor }),
-        GlowBR = createDrawing("Line", { Visible = false, ZIndex = CONFIG.BaseZIndex, Thickness = CONFIG.GlowThickness, Color = CONFIG.GlowColor }),
-        
-        BoxTL = createDrawing("Line", { Visible = false, ZIndex = CONFIG.BaseZIndex + 1, Thickness = CONFIG.BoxThickness, Color = CONFIG.BoxColor }),
-        BoxTR = createDrawing("Line", { Visible = false, ZIndex = CONFIG.BaseZIndex + 1, Thickness = CONFIG.BoxThickness, Color = CONFIG.BoxColor }),
-        BoxBL = createDrawing("Line", { Visible = false, ZIndex = CONFIG.BaseZIndex + 1, Thickness = CONFIG.BoxThickness, Color = CONFIG.BoxColor }),
-        BoxBR = createDrawing("Line", { Visible = false, ZIndex = CONFIG.BaseZIndex + 1, Thickness = CONFIG.BoxThickness, Color = CONFIG.BoxColor }),
-
-        HealthBarBorder = createDrawing("Square", { Visible = false, ZIndex = CONFIG.BaseZIndex + 2, Filled = true, Color = Color3.fromRGB(0, 0, 0) }),
-        HealthBarBg     = createDrawing("Square", { Visible = false, ZIndex = CONFIG.BaseZIndex + 3, Filled = true, Color = Color3.fromRGB(20, 20, 25), Transparency = 0.85 }),
-        HealthBar       = createDrawing("Square", { Visible = false, ZIndex = CONFIG.BaseZIndex + 4, Filled = true, Color = Color3.fromRGB(255, 255, 255) }),
-
-        NameText     = createDrawing("Text", { Visible = false, ZIndex = CONFIG.BaseZIndex + 5, Center = true, Outline = true, OutlineColor = Color3.fromRGB(0, 0, 0), Size = CONFIG.NameSize, Color = CONFIG.NameColor, Font = 2 }),
-        DistanceText = createDrawing("Text", { Visible = false, ZIndex = CONFIG.BaseZIndex + 5, Center = true, Outline = true, OutlineColor = Color3.fromRGB(0, 0, 0), Size = CONFIG.DistanceSize, Color = CONFIG.DistanceColor, Font = 2 }),
+        Container = container,
+        Glow = glow,
+        Box = box,
+        HealthBorder = healthBorder,
+        HealthBg = healthBg,
+        HealthFill = healthFill,
+        NameText = nameText,
+        DistanceText = distanceText,
     }
 end
 
 local function removeEntityCache(key)
     if espCache[key] then
-        for _, drawing in pairs(espCache[key]) do
+        if espCache[key].Container then
             pcall(function()
-                drawing:Remove()
+                espCache[key].Container:Destroy()
             end)
         end
         espCache[key] = nil
@@ -130,20 +212,21 @@ end
 local function setupPlayer(player)
     if player == LocalPlayer then return end
 
-    local function onCharacterAdded(char)
+    player.CharacterAdded:Connect(function(char)
         task.delay(0.5, function()
             if char and char.Parent then
                 applyChams(char)
             end
         end)
-    end
-
-    player.CharacterAdded:Connect(onCharacterAdded)
+    end)
+    
     if player.Character then
-        onCharacterAdded(player.Character)
+        task.delay(0.5, function()
+            applyChams(player.Character)
+        end)
     end
     
-    espCache[player] = createEntityCache()
+    espCache[player] = createEntityUI()
 end
 
 for _, player in ipairs(Players:GetPlayers()) do
@@ -169,7 +252,7 @@ local function checkAndSetupNPC(model)
     local rootPart = model:FindFirstChild("HumanoidRootPart")
 
     if humanoid and rootPart then
-        espCache[model] = createEntityCache()
+        espCache[model] = createEntityUI()
         task.delay(0.5, function()
             if model and model.Parent then
                 applyChams(model)
@@ -195,7 +278,7 @@ Workspace.DescendantAdded:Connect(function(child)
 end)
 
 -- Render Loop
-getgenv()._UniversalESPConnection = RunService.RenderStepped:Connect(function()
+RunService.RenderStepped:Connect(function()
     local camPos = Camera.CFrame.Position
 
     for key, cache in pairs(espCache) do
@@ -250,62 +333,57 @@ getgenv()._UniversalESPConnection = RunService.RenderStepped:Connect(function()
                         local x = centerScreen.X - (width / 2)
                         local y = topScreen.Y
 
-                        local topLeft = Vector2.new(x, y)
-                        local topRight = Vector2.new(x + width, y)
-                        local bottomLeft = Vector2.new(x, y + height)
-                        local bottomRight = Vector2.new(x + width, y + height)
+                        -- Box Position & Size
+                        cache.Box.Position = UDim2.new(0, x, 0, y)
+                        cache.Box.Size = UDim2.new(0, width, 0, height)
+                        cache.Box.Visible = true
 
-                        cache.BoxTL.From = topLeft; cache.BoxTL.To = topRight; cache.BoxTL.Visible = true
-                        cache.BoxTR.From = topRight; cache.BoxTR.To = bottomRight; cache.BoxTR.Visible = true
-                        cache.BoxBL.From = bottomLeft; cache.BoxBL.To = bottomRight; cache.BoxBL.Visible = true
-                        cache.BoxBR.From = topLeft; cache.BoxBR.To = bottomLeft; cache.BoxBR.Visible = true
-
+                        -- Glow Position & Size
                         local glowOffset = 1
-                        local gTopLeft = Vector2.new(x - glowOffset, y - glowOffset)
-                        local gTopRight = Vector2.new(x + width + glowOffset, y - glowOffset)
-                        local gBottomLeft = Vector2.new(x - glowOffset, y + height + glowOffset)
-                        local gBottomRight = Vector2.new(x + width + glowOffset, y + height + glowOffset)
+                        cache.Glow.Position = UDim2.new(0, x - glowOffset, 0, y - glowOffset)
+                        cache.Glow.Size = UDim2.new(0, width + (glowOffset * 2), 0, height + (glowOffset * 2))
+                        cache.Glow.Visible = true
 
-                        cache.GlowTL.From = gTopLeft; cache.GlowTL.To = gTopRight; cache.GlowTL.Visible = true
-                        cache.GlowTR.From = gTopRight; cache.GlowTR.To = gBottomRight; cache.GlowTR.Visible = true
-                        cache.GlowBL.From = gBottomLeft; cache.GlowBL.To = gBottomRight; cache.GlowBL.Visible = true
-                        cache.GlowBR.From = gTopLeft; cache.GlowBR.To = gBottomLeft; cache.GlowBR.Visible = true
-
+                        -- Healthbar
                         if CONFIG.HealthBarEnabled then
                             local barWidth = 3
                             local barOffset = 5
                             local healthPercent = math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1)
                             local barHeight = height * healthPercent
 
-                            cache.HealthBarBorder.Position = Vector2.new(x - barWidth - barOffset - 1, y - 1)
-                            cache.HealthBarBorder.Size = Vector2.new(barWidth + 2, height + 2)
-                            cache.HealthBarBorder.Visible = true
+                            cache.HealthBorder.Position = UDim2.new(0, x - barWidth - barOffset - 1, 0, y - 1)
+                            cache.HealthBorder.Size = UDim2.new(0, barWidth + 2, 0, height + 2)
+                            cache.HealthBorder.Visible = true
 
-                            cache.HealthBarBg.Position = Vector2.new(x - barWidth - barOffset, y)
-                            cache.HealthBarBg.Size = Vector2.new(barWidth, height)
-                            cache.HealthBarBg.Visible = true
+                            cache.HealthBg.Position = UDim2.new(0, x - barWidth - barOffset, 0, y)
+                            cache.HealthBg.Size = UDim2.new(0, barWidth, 0, height)
+                            cache.HealthBg.Visible = true
 
-                            cache.HealthBar.Position = Vector2.new(x - barWidth - barOffset, y + (height - barHeight))
-                            cache.HealthBar.Size = Vector2.new(barWidth, barHeight)
-                            cache.HealthBar.Visible = true
+                            cache.HealthFill.Position = UDim2.new(0, x - barWidth - barOffset, 0, y + (height - barHeight))
+                            cache.HealthFill.Size = UDim2.new(0, barWidth, 0, barHeight)
+                            cache.HealthFill.Visible = true
                         else
-                            cache.HealthBarBorder.Visible = false
-                            cache.HealthBarBg.Visible = false
-                            cache.HealthBar.Visible = false
+                            cache.HealthBorder.Visible = false
+                            cache.HealthBg.Visible = false
+                            cache.HealthFill.Visible = false
                         end
 
+                        -- Distance
                         if CONFIG.DistanceEnabled then
                             local distance = (camPos - rootPart.Position).Magnitude
                             cache.DistanceText.Text = math.floor(distance) .. "m"
-                            cache.DistanceText.Position = Vector2.new(x + (width / 2), y + height + 3)
+                            cache.DistanceText.Position = UDim2.new(0, x + (width / 2) - 50, 0, y + height + 3)
+                            cache.DistanceText.Size = UDim2.new(0, 100, 0, 15)
                             cache.DistanceText.Visible = true
                         else
                             cache.DistanceText.Visible = false
                         end
 
+                        -- Username
                         if CONFIG.NameEnabled and entityName ~= "" then
                             cache.NameText.Text = entityName
-                            cache.NameText.Position = Vector2.new(x + (width / 2), y - 16)
+                            cache.NameText.Position = UDim2.new(0, x + (width / 2) - 75, 0, y - 18)
+                            cache.NameText.Size = UDim2.new(0, 150, 0, 16)
                             cache.NameText.Visible = true
                         else
                             cache.NameText.Visible = false
@@ -316,9 +394,14 @@ getgenv()._UniversalESPConnection = RunService.RenderStepped:Connect(function()
         end
 
         if shouldHide then
-            for _, drawing in pairs(cache) do
-                drawing.Visible = false
-            end
+            cache.Box.Visible = false
+            cache.Glow.Visible = false
+            cache.HealthBorder.Visible = false
+            cache.HealthBg.Visible = false
+            cache.HealthFill.Visible = false
+            cache.NameText.Visible = false
+            cache.DistanceText.Visible = false
+
             if typeof(key) == "Instance" and key:IsA("Model") and (not character or not character.Parent) then
                 removeChams(key)
                 removeEntityCache(key)
