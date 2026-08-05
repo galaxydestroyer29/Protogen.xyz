@@ -1,46 +1,45 @@
---[[\
-    Universal Box ESP & Chams (Players + NPCs) - Native UI Engine (Dynamic Bounds & Safe Globals)
-    Environment: Roblox Client (LocalScript)
-]]--
+-- Universal Box ESP & Chams (Players + NPCs) - Native UI Engine
+-- Environment: Roblox Client (LocalScript)
 
-local CoreGui = game:GetService("CoreGui")
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
+local CoreGui = game:GetService("CoreGui");
+local Players = game:GetService("Players");
+local RunService = game:GetService("RunService");
+local Workspace = game:GetService("Workspace");
 
-local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer;
+local Camera = Workspace.CurrentCamera;
 
 -- Prevent duplicate execution stacking
 if getgenv()._UniversalESPUI then
     pcall(function()
-        getgenv()._UniversalESPUI:Destroy()
-    end)
-    getgenv()._UniversalESPUI = nil
+        getgenv()._UniversalESPUI:Destroy();
+    end);
+    getgenv()._UniversalESPUI = nil;
 end
 
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "UniversalESP_Native"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+local ScreenGui = Instance.new("ScreenGui");
+ScreenGui.Name = "UniversalESP_Native";
+ScreenGui.ResetOnSpawn = false;
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling;
 
 pcall(function()
-    local envSyn = getgenv().syn
-    if envSyn and envSyn.protect_gui then
-        envSyn.protect_gui(ScreenGui)
-        ScreenGui.Parent = CoreGui
+    local env = getgenv();
+    local synLib = env.syn;
+    if synLib and synLib.protect_gui then
+        synLib.protect_gui(ScreenGui);
+        ScreenGui.Parent = CoreGui;
     elseif gethui then
-        ScreenGui.Parent = gethui()
+        ScreenGui.Parent = gethui();
     else
-        ScreenGui.Parent = CoreGui
+        ScreenGui.Parent = CoreGui;
     end
-end)
+end);
 
-getgenv()._UniversalESPUI = ScreenGui
+getgenv()._UniversalESPUI = ScreenGui;
 
 local CONFIG = {
-    BoxColor = Color3.fromRGB(0, 240, 255),     -- Vibrant Cyan Box
-    GlowColor = Color3.fromRGB(10, 10, 20),     -- Deep Dark Shadow/Glow
+    BoxColor = Color3.fromRGB(0, 240, 255),
+    GlowColor = Color3.fromRGB(10, 10, 20),
     TeamCheck = false,
     
     -- Chams Configuration
@@ -52,138 +51,131 @@ local CONFIG = {
     HealthBarEnabled = true,
     NameEnabled = true,
     DistanceEnabled = true,
-}
+};
 
-local espCache = {}
+local espCache = {};
 
 local function applyChams(character)
-    if not CONFIG.ChamsEnabled then return end
+    if not CONFIG.ChamsEnabled then return; end
     
     for _, part in ipairs(character:GetChildren()) do
         if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
             if not part:FindFirstChild("LayeredNeonChams") then
-                local clone = part:Clone()
-                clone.Name = "LayeredNeonChams"
-                clone.ClearAllChildren(clone)
-                clone.Anchored = false
-                clone.CanCollide = false
-                clone.Massless = true
+                local clone = part:Clone();
+                clone.Name = "LayeredNeonChams";
+                clone:ClearAllChildren();
+                clone.Anchored = false;
+                clone.CanCollide = false;
+                clone.Massless = true;
                 
-                clone.Material = Enum.Material.Neon
-                clone.Color = CONFIG.ChamsColor
-                clone.Transparency = CONFIG.ChamsTransparency
-                clone.Size = part.Size + Vector3.new(0.15, 0.15, 0.15)
-                clone.CastShadow = false
+                clone.Material = Enum.Material.Neon;
+                clone.Color = CONFIG.ChamsColor;
+                clone.Transparency = CONFIG.ChamsTransparency;
+                clone.Size = part.Size + Vector3.new(0.15, 0.15, 0.15);
+                clone.CastShadow = false;
                 
-                local highlight = Instance.new("Highlight")
-                highlight.Name = "ChamsHighlight"
-                highlight.Adornee = clone
-                highlight.FillColor = CONFIG.ChamsColor
-                highlight.FillTransparency = CONFIG.ChamsTransparency
-                highlight.OutlineColor = CONFIG.ChamsColor
-                highlight.OutlineTransparency = 0
-                highlight.Parent = clone
+                local highlight = Instance.new("Highlight");
+                highlight.Name = "ChamsHighlight";
+                highlight.Adornee = clone;
+                highlight.FillColor = CONFIG.ChamsColor;
+                highlight.FillTransparency = CONFIG.ChamsTransparency;
+                highlight.OutlineColor = CONFIG.ChamsColor;
+                highlight.OutlineTransparency = 0;
+                highlight.Parent = clone;
                 
-                clone.Parent = part
+                clone.Parent = part;
                 
-                local weld = Instance.new("WeldConstraint")
-                weld.Part0 = part
-                weld.Part1 = clone
-                weld.Parent = clone
+                local weld = Instance.new("WeldConstraint");
+                weld.Part0 = part;
+                weld.Part1 = clone;
+                weld.Parent = clone;
             end
         end
     end
 end
 
 local function removeChams(character)
-    if not character then return end
+    if not character then return; end
     for _, part in ipairs(character:GetChildren()) do
         if part:IsA("BasePart") then
-            local overlay = part:FindFirstChild("LayeredNeonChams")
-            if overlay then overlay:Destroy() end
+            local overlay = part:FindFirstChild("LayeredNeonChams");
+            if overlay then overlay:Destroy(); end
         end
     end
 end
 
 local function createEntityUI()
-    local container = Instance.new("Folder")
-    container.Name = "EntityESP"
-    container.Parent = ScreenGui
+    local container = Instance.new("Folder");
+    container.Name = "EntityESP";
+    container.Parent = ScreenGui;
 
-    -- Outer Glow / Shadow
-    local glow = Instance.new("Frame")
-    glow.Name = "Glow"
-    glow.BackgroundTransparency = 1
-    glow.Visible = false
-    glow.Parent = container
+    local glow = Instance.new("Frame");
+    glow.Name = "Glow";
+    glow.BackgroundTransparency = 1;
+    glow.Visible = false;
+    glow.Parent = container;
 
-    local glowStroke = Instance.new("UIStroke")
-    glowStroke.Color = CONFIG.GlowColor
-    glowStroke.Thickness = 3
-    glowStroke.Parent = glow
+    local glowStroke = Instance.new("UIStroke");
+    glowStroke.Color = CONFIG.GlowColor;
+    glowStroke.Thickness = 3;
+    glowStroke.Parent = glow;
 
-    -- Box Frame
-    local box = Instance.new("Frame")
-    box.Name = "Box"
-    box.BackgroundTransparency = 1
-    box.Visible = false
-    box.Parent = container
+    local box = Instance.new("Frame");
+    box.Name = "Box";
+    box.BackgroundTransparency = 1;
+    box.Visible = false;
+    box.Parent = container;
 
-    local boxStroke = Instance.new("UIStroke")
-    boxStroke.Color = CONFIG.BoxColor
-    boxStroke.Thickness = 1
-    boxStroke.Parent = box
+    local boxStroke = Instance.new("UIStroke");
+    boxStroke.Color = CONFIG.BoxColor;
+    boxStroke.Thickness = 1;
+    boxStroke.Parent = box;
 
-    -- Vertical Left Healthbar Border
-    local healthBorder = Instance.new("Frame")
-    healthBorder.Name = "HealthBorder"
-    healthBorder.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    healthBorder.BorderSizePixel = 0
-    healthBorder.Visible = false
-    healthBorder.Parent = container
+    local healthBorder = Instance.new("Frame");
+    healthBorder.Name = "HealthBorder";
+    healthBorder.BackgroundColor3 = Color3.fromRGB(0, 0, 0);
+    healthBorder.BorderSizePixel = 0;
+    healthBorder.Visible = false;
+    healthBorder.Parent = container;
 
-    -- Healthbar Background
-    local healthBg = Instance.new("Frame")
-    healthBg.Name = "HealthBg"
-    healthBg.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-    healthBg.BackgroundTransparency = 0.15
-    healthBg.BorderSizePixel = 0
-    healthBg.Visible = false
-    healthBg.Parent = container
+    local healthBg = Instance.new("Frame");
+    healthBg.Name = "HealthBg";
+    healthBg.BackgroundColor3 = Color3.fromRGB(20, 20, 25);
+    healthBg.BackgroundTransparency = 0.15;
+    healthBg.BorderSizePixel = 0;
+    healthBg.Visible = false;
+    healthBg.Parent = container;
 
-    -- Healthbar Foreground Fill
-    local healthFill = Instance.new("Frame")
-    healthFill.Name = "HealthFill"
-    healthFill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    healthFill.BorderSizePixel = 0
-    healthFill.Visible = false
-    healthFill.Parent = container
+    local healthFill = Instance.new("Frame");
+    healthFill.Name = "HealthFill";
+    healthFill.BackgroundColor3 = Color3.fromRGB(255, 255, 255);
+    healthFill.BorderSizePixel = 0;
+    healthFill.Visible = false;
+    healthFill.Parent = container;
 
-    -- Username Text
-    local nameText = Instance.new("TextLabel")
-    nameText.Name = "NameText"
-    nameText.BackgroundTransparency = 1
-    nameText.TextColor3 = Color3.fromRGB(255, 255, 255)
-    nameText.TextStrokeTransparency = 0
-    nameText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-    nameText.TextSize = 12
-    nameText.Font = Enum.Font.SourceSansBold
-    nameText.TextXAlignment = Enum.TextXAlignment.Center
-    nameText.Visible = false
-    nameText.Parent = container
+    local nameText = Instance.new("TextLabel");
+    nameText.Name = "NameText";
+    nameText.BackgroundTransparency = 1;
+    nameText.TextColor3 = Color3.fromRGB(255, 255, 255);
+    nameText.TextStrokeTransparency = 0;
+    nameText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
+    nameText.TextSize = 12;
+    nameText.Font = Enum.Font.SourceSansBold;
+    nameText.TextXAlignment = Enum.TextXAlignment.Center;
+    nameText.Visible = false;
+    nameText.Parent = container;
 
-    -- Distance Text
-    local distanceText = Instance.new("TextLabel")
-    distanceText.Name = "DistanceText"
-    distanceText.BackgroundTransparency = 1
-    distanceText.TextColor3 = Color3.fromRGB(160, 180, 200)
-    distanceText.TextStrokeTransparency = 0
-    distanceText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-    distanceText.TextSize = 11
-    distanceText.Font = Enum.Font.SourceSansBold
-    distanceText.TextXAlignment = Enum.TextXAlignment.Center
-    distanceText.Visible = false
-    distanceText.Parent = container
+    local distanceText = Instance.new("TextLabel");
+    distanceText.Name = "DistanceText";
+    distanceText.BackgroundTransparency = 1;
+    distanceText.TextColor3 = Color3.fromRGB(160, 180, 200);
+    distanceText.TextStrokeTransparency = 0;
+    distanceText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
+    distanceText.TextSize = 11;
+    distanceText.Font = Enum.Font.SourceSansBold;
+    distanceText.TextXAlignment = Enum.TextXAlignment.Center;
+    distanceText.Visible = false;
+    distanceText.Parent = container;
 
     return {
         Container = container,
@@ -194,214 +186,190 @@ local function createEntityUI()
         HealthFill = healthFill,
         NameText = nameText,
         DistanceText = distanceText,
-    }
+    };
 end
 
 local function removeEntityCache(key)
     if espCache[key] then
         if espCache[key].Container then
             pcall(function()
-                espCache[key].Container:Destroy()
-            end)
+                espCache[key].Container:Destroy();
+            end);
         end
-        espCache[key] = nil
+        espCache[key] = nil;
     end
 end
 
--- Track Players
 local function setupPlayer(player)
-    if player == LocalPlayer then return end
+    if player == LocalPlayer then return; end
 
     player.CharacterAdded:Connect(function(char)
         task.delay(0.5, function()
             if char and char.Parent then
-                applyChams(char)
+                applyChams(char);
             end
-        end)
-    end)
+        end);
+    end);
     
     if player.Character then
         task.delay(0.5, function()
-            applyChams(player.Character)
-        end)
+            applyChams(player.Character);
+        end);
     end
     
-    espCache[player] = createEntityUI()
+    espCache[player] = createEntityUI();
 end
 
 for _, player in ipairs(Players:GetPlayers()) do
-    setupPlayer(player)
+    setupPlayer(player);
 end
 
-Players.PlayerAdded:Connect(setupPlayer)
+Players.PlayerAdded:Connect(setupPlayer);
 Players.PlayerRemoving:Connect(function(player)
-    removeEntityCache(player)
+    removeEntityCache(player);
     if player.Character then
-        removeChams(player.Character)
+        removeChams(player.Character);
     end
-end)
+end);
 
--- Track NPCs
 local function checkAndSetupNPC(model)
-    if not model:IsA("Model") then return end
-    if model == LocalPlayer.Character then return end
-    if Players:GetPlayerFromCharacter(model) then return end
-    if espCache[model] then return end
+    if not model:IsA("Model") then return; end
+    if model == LocalPlayer.Character then return; end
+    if Players:GetPlayerFromCharacter(model) then return; end
+    if espCache[model] then return; end
 
-    local humanoid = model:FindFirstChildOfClass("Humanoid")
-    local rootPart = model:FindFirstChild("HumanoidRootPart")
+    local humanoid = model:FindFirstChildOfClass("Humanoid");
+    local rootPart = model:FindFirstChild("HumanoidRootPart");
 
     if humanoid and rootPart then
-        espCache[model] = createEntityUI()
+        espCache[model] = createEntityUI();
         task.delay(0.5, function()
             if model and model.Parent then
-                applyChams(model)
+                applyChams(model);
             end
-        end)
+        end);
     end
 end
 
 for _, obj in ipairs(Workspace:GetDescendants()) do
-    local model = obj:FindFirstAncestorOfClass("Model")
+    local model = obj:FindFirstAncestorOfClass("Model");
     if model then
-        checkAndSetupNPC(model)
+        checkAndSetupNPC(model);
     end
 end
 
 Workspace.DescendantAdded:Connect(function(child)
     if child:IsA("Humanoid") or child.Name == "HumanoidRootPart" or child:IsA("Model") then
-        local model = child:IsA("Model") and child or child:FindFirstAncestorOfClass("Model")
+        local model = child:IsA("Model") and child or child:FindFirstAncestorOfClass("Model");
         if model then
-            checkAndSetupNPC(model)
+            checkAndSetupNPC(model);
         end
     end
-end)
+end);
 
--- Render Loop
 RunService.RenderStepped:Connect(function()
-    local camPos = Camera.CFrame.Position
+    local camPos = Camera.CFrame.Position;
 
     for key, cache in pairs(espCache) do
-        local character = nil
-        local entityName = ""
+        local character = nil;
+        local entityName = "";
         
         if typeof(key) == "Instance" and key:IsA("Player") then
             if key ~= LocalPlayer then
-                character = key.Character
-                entityName = key.Name
+                character = key.Character;
+                entityName = key.Name;
             end
         elseif typeof(key) == "Instance" and key:IsA("Model") then
-            character = key
-            entityName = key.Name
+            character = key;
+            entityName = key.Name;
         end
 
-        local shouldHide = true
+        local shouldHide = true;
 
         if character and character:FindFirstChild("HumanoidRootPart") and character.Parent then
-            local humanoid = character:FindFirstChildOfClass("Humanoid")
-            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            local humanoid = character:FindFirstChildOfClass("Humanoid");
+            local rootPart = character:FindFirstChild("HumanoidRootPart");
             
             if humanoid and humanoid.Health > 0 and rootPart then
-                local passTeamCheck = true
+                local passTeamCheck = true;
                 if typeof(key) == "Instance" and key:IsA("Player") then
                     if CONFIG.TeamCheck and key.Team == LocalPlayer.Team then
-                        passTeamCheck = false
+                        passTeamCheck = false;
                     end
                 end
 
                 if passTeamCheck then
                     if CONFIG.ChamsEnabled then
-                        applyChams(character)
+                        applyChams(character);
                     end
 
-                    -- Dynamically scan exact top (head/hats) and bottom (feet) bounds
-                    local minY = math.huge
-                    local maxY = -math.huge
+                    -- Use stable RootPart-relative world anchors to prevent sinking or offset bugs
+                    local rootPos = rootPart.Position;
+                    local topWorld = rootPos + Vector3.new(0, 2.6, 0);
+                    local bottomWorld = rootPos - Vector3.new(0, 2.7, 0);
 
-                    for _, p in ipairs(character:GetDescendants()) do
-                        if p:IsA("BasePart") then
-                            local pTop = p.Position.Y + (p.Size.Y / 2)
-                            local pBottom = p.Position.Y - (p.Size.Y / 2)
-                            if pTop > maxY then maxY = pTop end
-                            if pBottom < minY then minY = pBottom end
-                        end
-                    end
-
-                    if minY == math.huge or maxY == -math.huge then
-                        maxY = rootPart.Position.Y + 3
-                        minY = rootPart.Position.Y - 3
-                    end
-
-                    local topWorld = Vector3.new(rootPart.Position.X, maxY + 0.1, rootPart.Position.Z)
-                    local bottomWorld = Vector3.new(rootPart.Position.X, minY - 0.1, rootPart.Position.Z)
-
-                    local topScreen, topVisible = Camera:WorldToViewportPoint(topWorld)
-                    local bottomScreen, bottomVisible = Camera:WorldToViewportPoint(bottomWorld)
+                    local topScreen, topVisible = Camera:WorldToViewportPoint(topWorld);
+                    local bottomScreen, bottomVisible = Camera:WorldToViewportPoint(bottomWorld);
 
                     if topVisible or bottomVisible then
-                        shouldHide = false
+                        shouldHide = false;
 
-                        local height = math.abs(bottomScreen.Y - topScreen.Y)
-                        local width = height / 1.7
+                        local height = math.abs(bottomScreen.Y - topScreen.Y);
+                        local width = height / 1.7;
 
-                        local centerScreen = Camera:WorldToViewportPoint(rootPart.Position)
-                        local x = centerScreen.X - (width / 2)
-                        local y = topScreen.Y
+                        local centerScreen = Camera:WorldToViewportPoint(rootPos);
+                        local x = centerScreen.X - (width / 2);
+                        local y = topScreen.Y;
 
-                        -- Box Position & Size
-                        cache.Box.Position = UDim2.new(0, x, 0, y)
-                        cache.Box.Size = UDim2.new(0, width, 0, height)
-                        cache.Box.Visible = true
+                        cache.Box.Position = UDim2.new(0, x, 0, y);
+                        cache.Box.Size = UDim2.new(0, width, 0, height);
+                        cache.Box.Visible = true;
 
-                        -- Glow Position & Size
-                        local glowOffset = 1
-                        cache.Glow.Position = UDim2.new(0, x - glowOffset, 0, y - glowOffset)
-                        cache.Glow.Size = UDim2.new(0, width + (glowOffset * 2), 0, height + (glowOffset * 2))
-                        cache.Glow.Visible = true
+                        local glowOffset = 1;
+                        cache.Glow.Position = UDim2.new(0, x - glowOffset, 0, y - glowOffset);
+                        cache.Glow.Size = UDim2.new(0, width + (glowOffset * 2), 0, height + (glowOffset * 2));
+                        cache.Glow.Visible = true;
 
-                        -- Healthbar
                         if CONFIG.HealthBarEnabled then
-                            local barWidth = 3
-                            local barOffset = 5
-                            local healthPercent = math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1)
-                            local barHeight = height * healthPercent
+                            local barWidth = 3;
+                            local barOffset = 5;
+                            local healthPercent = math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1);
+                            local barHeight = height * healthPercent;
 
-                            cache.HealthBorder.Position = UDim2.new(0, x - barWidth - barOffset - 1, 0, y - 1)
-                            cache.HealthBorder.Size = UDim2.new(0, barWidth + 2, 0, height + 2)
-                            cache.HealthBorder.Visible = true
+                            cache.HealthBorder.Position = UDim2.new(0, x - barWidth - barOffset - 1, 0, y - 1);
+                            cache.HealthBorder.Size = UDim2.new(0, barWidth + 2, 0, height + 2);
+                            cache.HealthBorder.Visible = true;
 
-                            cache.HealthBg.Position = UDim2.new(0, x - barWidth - barOffset, 0, y)
-                            cache.HealthBg.Size = UDim2.new(0, barWidth, 0, height)
-                            cache.HealthBg.Visible = true
+                            cache.HealthBg.Position = UDim2.new(0, x - barWidth - barOffset, 0, y);
+                            cache.HealthBg.Size = UDim2.new(0, barWidth, 0, height);
+                            cache.HealthBg.Visible = true;
 
-                            cache.HealthFill.Position = UDim2.new(0, x - barWidth - barOffset, 0, y + (height - barHeight))
-                            cache.HealthFill.Size = UDim2.new(0, barWidth, 0, barHeight)
-                            cache.HealthFill.Visible = true
+                            cache.HealthFill.Position = UDim2.new(0, x - barWidth - barOffset, 0, y + (height - barHeight));
+                            cache.HealthFill.Size = UDim2.new(0, barWidth, 0, barHeight);
+                            cache.HealthFill.Visible = true;
                         else
-                            cache.HealthBorder.Visible = false
-                            cache.HealthBg.Visible = false
-                            cache.HealthFill.Visible = false
+                            cache.HealthBorder.Visible = false;
+                            cache.HealthBg.Visible = false;
+                            cache.HealthFill.Visible = false;
                         end
 
-                        -- Distance
                         if CONFIG.DistanceEnabled then
-                            local distance = (camPos - rootPart.Position).Magnitude
-                            cache.DistanceText.Text = math.floor(distance) .. "m"
-                            cache.DistanceText.Position = UDim2.new(0, x + (width / 2) - 50, 0, y + height + 3)
-                            cache.DistanceText.Size = UDim2.new(0, 100, 0, 15)
-                            cache.DistanceText.Visible = true
+                            local distance = (camPos - rootPos).Magnitude;
+                            cache.DistanceText.Text = math.floor(distance) .. "m";
+                            cache.DistanceText.Position = UDim2.new(0, x + (width / 2) - 50, 0, y + height + 3);
+                            cache.DistanceText.Size = UDim2.new(0, 100, 0, 15);
+                            cache.DistanceText.Visible = true;
                         else
-                            cache.DistanceText.Visible = false
+                            cache.DistanceText.Visible = false;
                         end
 
-                        -- Username
                         if CONFIG.NameEnabled and entityName ~= "" then
-                            cache.NameText.Text = entityName
-                            cache.NameText.Position = UDim2.new(0, x + (width / 2) - 75, 0, y - 18)
-                            cache.NameText.Size = UDim2.new(0, 150, 0, 16)
-                            cache.NameText.Visible = true
+                            cache.NameText.Text = entityName;
+                            cache.NameText.Position = UDim2.new(0, x + (width / 2) - 75, 0, y - 18);
+                            cache.NameText.Size = UDim2.new(0, 150, 0, 16);
+                            cache.NameText.Visible = true;
                         else
-                            cache.NameText.Visible = false
+                            cache.NameText.Visible = false;
                         end
                     end
                 end
@@ -409,18 +377,18 @@ RunService.RenderStepped:Connect(function()
         end
 
         if shouldHide then
-            cache.Box.Visible = false
-            cache.Glow.Visible = false
-            cache.HealthBorder.Visible = false
-            cache.HealthBg.Visible = false
-            cache.HealthFill.Visible = false
-            cache.NameText.Visible = false
-            cache.DistanceText.Visible = false
+            cache.Box.Visible = false;
+            cache.Glow.Visible = false;
+            cache.HealthBorder.Visible = false;
+            cache.HealthBg.Visible = false;
+            cache.HealthFill.Visible = false;
+            cache.NameText.Visible = false;
+            cache.DistanceText.Visible = false;
 
             if typeof(key) == "Instance" and key:IsA("Model") and (not character or not character.Parent) then
-                removeChams(key)
-                removeEntityCache(key)
+                removeChams(key);
+                removeEntityCache(key);
             end
         end
     end
-end)
+end);
