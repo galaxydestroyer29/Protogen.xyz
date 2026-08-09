@@ -5,9 +5,17 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
 local FOV_RADIUS = 40
--- TWEAK THIS: If the cursor sits too high at long distances, increase this number (e.g., 10, 25, 36)
--- If it sits too low, make it negative (e.g., -10)
-local Y_OFFSET = 15 
+
+-- === CRITICAL SETTINGS FOR FPS/TACTICAL GAMES ===
+-- If the aimbot violently shakes or overshoots, INCREASE this number (e.g., 5, 8, 10).
+-- If it tracks the head too slowly, DECREASE this number (e.g., 1.5, 2).
+local SENSITIVITY_DIVISOR = 4 
+
+-- 3D Offset: Adjusts the aiming point in the actual game world rather than on your 2D screen.
+-- This completely prevents the aim from drifting higher/lower when distance changes.
+-- Use small decimals (e.g., 0.5 aims slightly above the center of the head, -0.5 aims below).
+local Y_3D_OFFSET = 0.2 
+-- ================================================
 
 local enabled = false
 local lockedTarget = nil
@@ -60,6 +68,7 @@ local function getTarget()
     if lockedTarget and lockedTarget.Parent and lockedTarget.Parent:FindFirstChild("Humanoid") then
         local humanoid = lockedTarget.Parent.Humanoid
         if humanoid.Health > 0 then
+            -- Verify target is still on screen
             local _, onScreen = Camera:WorldToViewportPoint(lockedTarget.Position)
             if onScreen then
                 return lockedTarget
@@ -76,8 +85,10 @@ local function getTarget()
             local humanoid = p.Character:FindFirstChild("Humanoid")
             
             if head and humanoid and humanoid.Health > 0 then
-                -- Strictly use ViewportPoint to match hardware mouse behavior 1:1
-                local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
+                -- Apply the 3D height offset HERE before calculating the 2D position
+                local targetPosition3D = head.Position + Vector3.new(0, Y_3D_OFFSET, 0)
+                local pos, onScreen = Camera:WorldToViewportPoint(targetPosition3D)
+                
                 if onScreen then
                     local dist = (Vector2.new(pos.X, pos.Y) - mouse).Magnitude
                     if dist <= minD then
@@ -96,6 +107,7 @@ end
 RunService.RenderStepped:Connect(function()
     local mouse = UserInputService:GetMouseLocation()
     
+    -- Update UI FOV Ring
     FOV_Circle.Position = mouse
     for _, ring in ipairs(glowRings) do
         ring.Position = mouse
@@ -105,20 +117,19 @@ RunService.RenderStepped:Connect(function()
     
     local target = getTarget()
     if target then
-        -- Retrieve pure Viewport coordinates
-        local pos, onScreen = Camera:WorldToViewportPoint(target.Position)
+        -- Calculate the exact 3D position again with our fix applied
+        local targetPosition3D = target.Position + Vector3.new(0, Y_3D_OFFSET, 0)
+        local pos, onScreen = Camera:WorldToViewportPoint(targetPosition3D)
         
         if onScreen then
-            -- Apply our manual vertical compensator to fix the distance drop-off
-            local targetX = pos.X
-            local targetY = pos.Y + Y_OFFSET
+            -- Calculate raw pixel distance
+            local deltaX = pos.X - mouse.X
+            local deltaY = pos.Y - mouse.Y
             
-            -- Calculate precise distance from hardware mouse to target pixel
-            local deltaX = targetX - mouse.X
-            local deltaY = targetY - mouse.Y
-            
-            -- Instantly step the cursor directly to the target
-            mousemoverel(deltaX, deltaY)
+            -- Divide the movement by the sensitivity divisor. 
+            -- This acts as a conversion ratio from "Pixels" to "3D Camera Rotation",
+            -- entirely preventing the violently shaky overshoot bug.
+            mousemoverel(deltaX / SENSITIVITY_DIVISOR, deltaY / SENSITIVITY_DIVISOR)
         end
     end
 end)
