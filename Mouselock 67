@@ -8,6 +8,11 @@ local FOV_RADIUS = 40
 local enabled = false
 local lockedTarget = nil
 
+-- TWEAK THESE IF YOUR CURSOR GOES UNDERGROUND OR OFF-CENTER:
+local SENSITIVITY = 1.0     -- Overall speed multiplier
+local Y_MULTIPLIER = 1.0    -- Change to -1.0 if your mouse moves vertically in reverse (underground)
+local HEAD_OFFSET = Vector3.new(0, 0, 0) -- Adjust if it aims too high or low on the head
+
 -- Create intense gradient glow effect using 12 layered circles
 local glowRings = {}
 local layerCount = 12
@@ -52,7 +57,7 @@ end)
 local function getTarget()
     local mouse = UserInputService:GetMouseLocation()
     
-    -- Sticky lock: maintain lock strictly on the chosen target until they die or leave screen
+    -- Sticky lock: maintain lock strictly until player dies or leaves screen
     if lockedTarget and lockedTarget.Parent and lockedTarget.Parent:FindFirstChild("Humanoid") then
         local humanoid = lockedTarget.Parent.Humanoid
         if humanoid.Health > 0 then
@@ -72,7 +77,8 @@ local function getTarget()
             local humanoid = p.Character:FindFirstChild("Humanoid")
             
             if head and humanoid and humanoid.Health > 0 then
-                local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
+                local adjustedPos = head.Position + HEAD_OFFSET
+                local pos, onScreen = Camera:WorldToViewportPoint(adjustedPos)
                 if onScreen then
                     local dist = (Vector2.new(pos.X, pos.Y) - mouse).Magnitude
                     if dist <= minD then
@@ -101,11 +107,11 @@ RunService.RenderStepped:Connect(function()
     
     local target = getTarget()
     if target then
-        local pos, onScreen = Camera:WorldToViewportPoint(target.Position)
+        local adjustedPos = target.Position + HEAD_OFFSET
+        local pos, onScreen = Camera:WorldToViewportPoint(adjustedPos)
         if onScreen then
-            -- Calculate exact pixel delta to eliminate absolute coordinate/window offset bugs
-            local deltaX = pos.X - mouse.X
-            local deltaY = pos.Y - mouse.Y
+            local deltaX = (pos.X - mouse.X) * SENSITIVITY
+            local deltaY = (pos.Y - mouse.Y) * SENSITIVITY * Y_MULTIPLIER
             
             if mousemoverel then
                 mousemoverel(deltaX, deltaY)
