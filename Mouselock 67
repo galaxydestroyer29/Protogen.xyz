@@ -1,7 +1,6 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local GuiService = game:GetService("GuiService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
@@ -34,16 +33,8 @@ FOV_Circle.Filled = false
 
 local function updateVisibility(isVisible)
     FOV_Circle.Visible = isVisible
-    for _, ring in idipairs(glowRings) do -- fixed loop syntax below
-        ring.Visible = isVisible
-    end
-end
-
--- Fix loop for visibility toggle safely
-local function setGlowVisible(state)
-    FOV_Circle.Visible = state
     for _, ring in ipairs(glowRings) do
-        ring.Visible = state
+        ring.Visible = isVisible
     end
 end
 
@@ -51,7 +42,7 @@ end
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if not gameProcessed and input.KeyCode == Enum.KeyCode.E then
         enabled = not enabled
-        setGlowVisible(enabled)
+        updateVisibility(enabled)
         if not enabled then
             lockedTarget = nil
         end
@@ -61,7 +52,7 @@ end)
 local function getTarget()
     local mouse = UserInputService:GetMouseLocation()
     
-    -- Sticky lock check: maintain lock strictly until player dies or leaves screen
+    -- Sticky lock: maintain lock strictly on the chosen target until they die or leave screen
     if lockedTarget and lockedTarget.Parent and lockedTarget.Parent:FindFirstChild("Humanoid") then
         local humanoid = lockedTarget.Parent.Humanoid
         if humanoid.Health > 0 then
@@ -100,7 +91,7 @@ end
 RunService.RenderStepped:Connect(function()
     local mouse = UserInputService:GetMouseLocation()
     
-    -- Keep FOV tracking the mouse position exactly
+    -- Keep FOV visuals locked to current mouse position instantly
     FOV_Circle.Position = mouse
     for _, ring in ipairs(glowRings) do
         ring.Position = mouse
@@ -110,17 +101,14 @@ RunService.RenderStepped:Connect(function()
     
     local target = getTarget()
     if target then
-        -- Convert 3D world position to viewport coordinates
-        local viewportPoint, onScreen = Camera:WorldToViewportPoint(target.Position)
-        
+        local pos, onScreen = Camera:WorldToViewportPoint(target.Position)
         if onScreen then
-            -- Account for GuiInset (top bar offset difference between absolute screen and viewport)
-            local inset = GuiService:GetGuiInset()
-            local absoluteX = viewportPoint.X
-            local absoluteY = viewportPoint.Y + inset.Y
+            -- Calculate exact pixel delta to eliminate absolute coordinate/window offset bugs
+            local deltaX = pos.X - mouse.X
+            local deltaY = pos.Y - mouse.Y
             
-            if mousemoveabs then
-                mousemoveabs(absoluteX, absoluteY)
+            if mousemoverel then
+                mousemoverel(deltaX, deltaY)
             end
         end
     end
