@@ -4,12 +4,10 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
-local FOV_RADIUS = 50 -- Significantly increased size
+local FOV_RADIUS = 55
 
--- Create an intense gradient glow effect using expanded layered circles
 local glowRings = {}
-local layerCount = 8
-for i = 1, layerCount do
+for i = 1, 8 do
     local ring = Drawing.new("Circle")
     ring.Visible = true
     ring.Radius = FOV_RADIUS + (i * 2)
@@ -20,7 +18,6 @@ for i = 1, layerCount do
     table.insert(glowRings, ring)
 end
 
--- Main FOV Circle
 local FOV_Circle = Drawing.new("Circle")
 FOV_Circle.Visible = true
 FOV_Circle.Radius = FOV_RADIUS
@@ -32,12 +29,10 @@ FOV_Circle.Filled = false
 local function getTarget()
     local closest, minD = nil, FOV_RADIUS
     local mouse = UserInputService:GetMouseLocation()
-    
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character then
             local head = p.Character:FindFirstChild("Head")
             local humanoid = p.Character:FindFirstChild("Humanoid")
-            
             if head and humanoid and humanoid.Health > 0 then
                 local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
                 if onScreen then
@@ -55,8 +50,6 @@ end
 
 RunService.RenderStepped:Connect(function()
     local mouse = UserInputService:GetMouseLocation()
-    
-    -- Update positions for main circle and glow layers
     FOV_Circle.Position = mouse
     for _, ring in ipairs(glowRings) do
         ring.Position = mouse
@@ -64,7 +57,6 @@ RunService.RenderStepped:Connect(function()
     
     local target = getTarget()
     if target then
-        local pos = Camera:WorldToViewportPoint(target.Position)
-        mousemoverel(pos.X - mouse.X, pos.Y - mouse.Y)
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
     end
 end)
