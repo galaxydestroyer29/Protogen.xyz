@@ -9,7 +9,7 @@ local FOV_RADIUS = 40
 -- === CRITICAL SETTINGS FOR FPS/TACTICAL GAMES ===
 -- If the aimbot violently shakes or overshoots, INCREASE this number (e.g., 5, 8, 10).
 -- If it tracks the head too slowly, DECREASE this number (e.g., 1.5, 2).
-local SENSITIVITY_DIVISOR = 4 
+local SENSITIVITY_DIVISOR = 10 
 
 -- 3D Offset: Adjusts the aiming point in the actual game world rather than on your 2D screen.
 -- This completely prevents the aim from drifting higher/lower when distance changes.
