@@ -1,13 +1,15 @@
-
+-- 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 local localPlayer = Players.LocalPlayer
 
 -- Configuration
 local isSilentAimEnabled = false
-local TOGGLE_KEY = Enum.KeyCode.E -- Change this keybind if desired
-local FOV_RADIUS = 200 -- Maximum screen radius to find targets
+local TOGGLE_KEY = Enum.KeyCode.E -- Press E to toggle
+local FOV_RADIUS = 200 
+local DEEP_BLUE = Color3.fromRGB(10, 80, 220) -- Deep blue color
 
 -- Environment & Safeguards
 local env = (getgenv and getgenv()) or _G or {}
@@ -15,15 +17,79 @@ local safeHookMeta = env.hookmetamethod or hookmetamethod
 local safeGetNamecall = env.getnamecallmethod or getnamecallmethod
 local safeCheckCaller = env.checkcaller or checkcaller or function() return false end
 
+-- GUI Setup (Protected UI parent)
+local success, uiParent = pcall(function()
+    if typeof(gethui) == "function" then return gethui() end
+    return localPlayer:WaitForChild("PlayerGui")
+end)
+if not success or not uiParent then uiParent = localPlayer:WaitForChild("PlayerGui") end
+
+if uiParent:FindFirstChild("ARCS_GlowingFOV") then
+    uiParent:FindFirstChild("ARCS_GlowingFOV"):Destroy()
+end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ARCS_GlowingFOV"
+screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true
+screenGui.DisplayOrder = 99999
+screenGui.Parent = uiParent
+
+-- FOV Master Frame
+local fovMaster = Instance.new("Frame")
+fovMaster.Size = UDim2.new(0, FOV_RADIUS * 2, 0, FOV_RADIUS * 2)
+fovMaster.AnchorPoint = Vector2.new(0.5, 0.5)
+fovMaster.BackgroundTransparency = 1
+fovMaster.Visible = false
+fovMaster.Parent = screenGui
+
+local coreRing = Instance.new("Frame")
+coreRing.Size = UDim2.new(1, 0, 1, 0)
+coreRing.BackgroundTransparency = 1
+coreRing.Parent = fovMaster
+
+local coreCorner = Instance.new("UICorner")
+coreCorner.CornerRadius = UDim.new(1, 0)
+coreCorner.Parent = coreRing
+
+-- Layered UIStrokes for a smooth outer glow effect
+local outerGlow = Instance.new("UIStroke")
+outerGlow.Color = DEEP_BLUE
+outerGlow.Thickness = 6
+outerGlow.Transparency = 0.75
+outerGlow.Parent = coreRing
+
+local midGlow = Instance.new("UIStroke")
+midGlow.Color = DEEP_BLUE
+midGlow.Thickness = 3.5
+midGlow.Transparency = 0.4
+midGlow.Parent = coreRing
+
+local coreStroke = Instance.new("UIStroke")
+coreStroke.Color = DEEP_BLUE
+coreStroke.Thickness = 1.5
+coreStroke.Transparency = 0
+coreStroke.Parent = coreRing
+
 -- Keybind Listener
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if not gameProcessed and input.KeyCode == TOGGLE_KEY then
         isSilentAimEnabled = not isSilentAimEnabled
-        print("[ARCS] Silent Aim State:", isSilentAimEnabled and "ACTIVE" | "DISABLED")
+        fovMaster.Visible = isSilentAimEnabled
+        print("[ARCS] Silent Aim:", isSilentAimEnabled and "ACTIVE" or "DISABLED")
     end
 end)
 
--- Optimized Closest Target Finder
+-- RenderStepped to center FOV on screen
+RunService.RenderStepped:Connect(function()
+    local curCam = Workspace.CurrentCamera
+    if curCam then
+        local center = Vector2.new(curCam.ViewportSize.X / 2, curCam.ViewportSize.Y / 2)
+        fovMaster.Position = UDim2.new(0, center.X, 0, center.Y)
+    end
+end)
+
+-- Closest Target Finder
 local function getClosestTargetPosition()
     local curCam = Workspace.CurrentCamera
     if not curCam then return nil end
@@ -56,7 +122,7 @@ local function getClosestTargetPosition()
     return closestPart and closestPart.Position or nil
 end
 
--- Secure Metamethod Hook (Anti-Cheat Safe)
+-- Secure Metamethod Hook
 if safeHookMeta and safeGetNamecall then
     pcall(function()
         local oldNamecall
@@ -64,7 +130,6 @@ if safeHookMeta and safeGetNamecall then
             local method = safeGetNamecall()
             local args = {...}
 
-            -- Only intercept when enabled, called by game scripts (not the executor), and a target exists
             if not safeCheckCaller() and isSilentAimEnabled then
                 local targetPos = getClosestTargetPosition()
                 
@@ -90,4 +155,4 @@ if safeHookMeta and safeGetNamecall then
     end)
 end
 
-print("[ARCS] Silent Aim loaded successfully. Press [E] to toggle.")
+print("[ARCS] Glowing Deep Blue FOV & Silent Aim loaded. Press [E] to toggle.")
