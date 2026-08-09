@@ -1,7 +1,6 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local GuiService = game:GetService("GuiService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
@@ -9,10 +8,7 @@ local FOV_RADIUS = 40
 local enabled = false
 local lockedTarget = nil
 
--- Compensate for Roblox's TopBar GUI Inset (36px) to fix vertical tracking drift
-local guiInset = GuiService:GetGuiInset()
-
--- Create an intense, heavy gradient glow effect using 12 layered circles
+-- Create intense gradient glow effect using 12 layered circles
 local glowRings = {}
 local layerCount = 12
 for i = 1, layerCount do
@@ -42,7 +38,7 @@ local function updateVisibility(isVisible)
     end
 end
 
--- Toggle tracking and FOV visibility using 'E'
+-- Toggle with 'E'
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if not gameProcessed and input.KeyCode == Enum.KeyCode.E then
         enabled = not enabled
@@ -54,22 +50,17 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 local function getTarget()
-    local mousePos = UserInputService:GetMouseLocation()
-    
-    -- Sticky Lock: Retain lock on target as long as they are alive and on-screen
+    -- Robust sticky lock: maintain lock strictly until player dies or leaves, preventing random unlocks
     if lockedTarget and lockedTarget.Parent and lockedTarget.Parent:FindFirstChild("Humanoid") then
         local humanoid = lockedTarget.Parent.Humanoid
         if humanoid.Health > 0 then
-            local _, onScreen = Camera:WorldToViewportPoint(lockedTarget.Position)
-            if onScreen then
-                return lockedTarget
-            end
+            return lockedTarget
         end
     end
     
-    -- If no target is locked, scan for the closest target within FOV_RADIUS
     lockedTarget = nil
     local closest, minD = nil, FOV_RADIUS
+    local mouse = UserInputService:GetMouseLocation()
     
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character then
@@ -79,9 +70,7 @@ local function getTarget()
             if head and humanoid and humanoid.Health > 0 then
                 local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
                 if onScreen then
-                    -- Account for topbar offset when comparing against mouse location
-                    local targetScreenPos = Vector2.new(pos.X, pos.Y)
-                    local dist = (targetScreenPos - mousePos).Magnitude
+                    local dist = (Vector2.new(pos.X, pos.Y) - mouse).Magnitude
                     if dist < minD then
                         minD = dist
                         closest = head
@@ -95,30 +84,19 @@ local function getTarget()
     return lockedTarget
 end
 
--- Bind directly to RenderPriority.Last to run AFTER camera physics updates (eliminates jump stutter)
-RunService:BindToRenderStep("MouseLockPipeline", Enum.RenderPriority.Last.Value, function()
-    local mousePos = UserInputService:GetMouseLocation()
+RunService.RenderStepped:Connect(function()
+    local mouse = UserInputService:GetMouseLocation()
     
-    -- Update visual FOV circle and glow ring positions
-    FOV_Circle.Position = mousePos
+    -- Update positions instantly every frame with zero delay
+    FOV_Circle.Position = mouse
     for _, ring in ipairs(glowRings) do
-        ring.Position = mousePos
+        ring.Position = mouse
     end
     
     if not enabled then return end
     
     local target = getTarget()
     if target then
-        local targetScreenPos, onScreen = Camera:WorldToViewportPoint(target.Position)
-        if onScreen then
-            -- Calculate absolute pixel delta between target and cursor position
-            local deltaX = targetScreenPos.X - mousePos.X
-            local deltaY = (targetScreenPos.Y - guiInset.Y) - (mousePos.Y - guiInset.Y)
-            
-            -- Apply direct physical relative mouse displacement
-            if mousemoverel then
-                mousemoverel(deltaX, deltaY)
-            end
-        end
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
     end
 end)
