@@ -5,10 +5,17 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
 local FOV_RADIUS = 40
+
+-- === SENSITIVITY TUNING ===
+-- Adjust this if the mouse moves too fast or too slow.
+-- Because this uses smooth 3D angles, it will not break when you move, jump, or change distance.
+local MOUSE_SENSITIVITY = 1.0 
+-- ==========================
+
 local enabled = false
 local lockedTarget = nil
 
--- Intense gradient glow setup
+-- Intense gradient glow setup (12 layered rings)
 local glowRings = {}
 local layerCount = 12
 for i = 1, layerCount do
@@ -52,7 +59,7 @@ end)
 local function getTarget()
     local mouse = UserInputService:GetMouseLocation()
     
-    -- Sticky lock validation: stays locked on target until they die or leave screen
+    -- Robust sticky lock: maintains lock on the chosen target until they die or leave screen
     if lockedTarget and lockedTarget.Parent and lockedTarget.Parent:FindFirstChild("Humanoid") then
         local humanoid = lockedTarget.Parent.Humanoid
         if humanoid.Health > 0 then
@@ -91,7 +98,7 @@ end
 RunService.RenderStepped:Connect(function()
     local mouse = UserInputService:GetMouseLocation()
     
-    -- Update FOV circle position instantly to follow cursor
+    -- Sync FOV circle position instantly to follow your cursor
     FOV_Circle.Position = mouse
     for _, ring in ipairs(glowRings) do
         ring.Position = mouse
@@ -101,7 +108,25 @@ RunService.RenderStepped:Connect(function()
     
     local target = getTarget()
     if target then
-        -- Direct CFrame lock onto the head: zero jitter, zero flying out, perfectly accurate at any distance
-        Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
+        -- ANGLE-BASED MOUSE LOCK MATHEMATICAL CONVERSION
+        -- Computes exact 3D Yaw and Pitch angles from camera to head, eliminating distance/height drift.
+        local camCFrame = Camera.CFrame
+        local localVector = camCFrame:VectorToObjectSpace(target.Position - camCFrame.Position)
+        
+        local yaw = math.atan2(-localVector.X, -localVector.Z)
+        local pitch = math.asin(localVector.Y / localVector.Magnitude)
+        
+        -- Convert radians to precise screen mouse pixels based on current resolution and FOV
+        local viewportSize = Camera.ViewportSize
+        local fovRad = math.rad(Camera.FieldOfView)
+        
+        local scaleX = (viewportSize.X / fovRad) * MOUSE_SENSITIVITY
+        local scaleY = (viewportSize.Y / fovRad) * MOUSE_SENSITIVITY
+        
+        local deltaX = yaw * scaleX
+        local deltaY = -pitch * scaleY
+        
+        -- Direct mouse cursor actuation (Mouse Lock, NOT Camera Lock) with zero prediction
+        mousemoverrel(deltaX, deltaY)
     end
 end)
