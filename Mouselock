@@ -8,7 +8,7 @@ local FOV_RADIUS = 40
 local enabled = false
 local lockedTarget = nil
 
--- Create an intense, heavy gradient glow effect using 12 layered circles
+-- Create intense gradient glow effect using 12 layered circles
 local glowRings = {}
 local layerCount = 12
 for i = 1, layerCount do
@@ -52,7 +52,7 @@ end)
 local function getTarget()
     local mouse = UserInputService:GetMouseLocation()
     
-    -- Sticky lock: Once a target is chosen, maintain tracking on them without dropping
+    -- Sticky lock check: maintain lock on chosen target
     if lockedTarget and lockedTarget.Parent and lockedTarget.Parent:FindFirstChild("Humanoid") then
         local humanoid = lockedTarget.Parent.Humanoid
         if humanoid.Health > 0 then
@@ -63,7 +63,6 @@ local function getTarget()
         end
     end
     
-    -- Find closest target within FOV if no active lock exists
     lockedTarget = nil
     local closest, minD = nil, FOV_RADIUS
     
@@ -102,7 +101,7 @@ RunService.RenderStepped:Connect(function()
     
     local target = getTarget()
     if target then
-        local pos = Camera:WorldToViewportPoint(target.Position)
-        mousemoverel(pos.X - mouse.X, pos.Y - mouse.Y)
+        -- Switched to Camera CFrame to eliminate mouse stutter, locking bugs, and input conflicts
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
     end
 end)
