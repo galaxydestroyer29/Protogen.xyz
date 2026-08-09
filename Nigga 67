@@ -1,4 +1,4 @@
--- Universal Box ESP & Chams (Players + NPCs) - Native UI Engine (Raycast-Passthrough Fixed)
+-- Universal Skeleton & Dynamic Health ESP (Players + NPCs) - Native UI Engine
 -- Environment: Roblox Client (LocalScript)
 
 local CoreGui = game:GetService("CoreGui");
@@ -39,14 +39,12 @@ end);
 getgenv()._UniversalESPUI = ScreenGui;
 
 local CONFIG = {
-    BoxColor = Color3.fromRGB(0, 240, 255),
-    GlowColor = Color3.fromRGB(10, 10, 20),
     TeamCheck = false,
     
-    -- Chams Configuration
-    ChamsEnabled = true,
-    ChamsColor = Color3.fromRGB(0, 240, 255),
-    ChamsTransparency = 0.12,
+    -- Skeleton Settings
+    SkeletonEnabled = true,
+    SkeletonColor = Color3.fromRGB(0, 240, 255),
+    SkeletonThickness = 1.5,
     
     -- UI Elements
     HealthBarEnabled = true,
@@ -54,59 +52,56 @@ local CONFIG = {
     DistanceEnabled = true,
 };
 
+-- Rig connection definitions (R6 & R15)
+local R6_CONNECTIONS = {
+    {"Head", "Torso"},
+    {"Torso", "Left Arm"},
+    {"Torso", "Right Arm"},
+    {"Torso", "Left Leg"},
+    {"Torso", "Right Leg"}
+};
+
+local R15_CONNECTIONS = {
+    {"Head", "UpperTorso"},
+    {"UpperTorso", "LowerTorso"},
+    {"UpperTorso", "LeftUpperArm"},
+    {"LeftUpperArm", "LeftLowerArm"},
+    {"LeftLowerArm", "LeftHand"},
+    {"UpperTorso", "RightUpperArm"},
+    {"RightUpperArm", "RightLowerArm"},
+    {"RightLowerArm", "RightHand"},
+    {"LowerTorso", "LeftUpperLeg"},
+    {"LeftUpperLeg", "LeftLowerLeg"},
+    {"LeftLowerLeg", "LeftFoot"},
+    {"LowerTorso", "RightUpperLeg"},
+    {"RightUpperLeg", "RightLowerLeg"},
+    {"RightLowerLeg", "RightFoot"}
+};
+
 local espCache = {};
 
-local function applyChams(character)
-    if not CONFIG.ChamsEnabled then return; end
-    
-    for _, part in ipairs(character:GetChildren()) do
-        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-            if not part:FindFirstChild("LayeredNeonChams") then
-                local clone = part:Clone();
-                clone.Name = "LayeredNeonChams";
-                clone:ClearAllChildren();
-                
-                -- Completely disable physical interactions, spatial queries, and raycast hits
-                clone.Anchored = false;
-                clone.CanCollide = false;
-                clone.CanTouch = false;
-                clone.CanQuery = false; -- Disables Workspace:Raycast / FindPartOnRay detection
-                clone.Massless = true;
-                clone.CastShadow = false;
-                
-                clone.Material = Enum.Material.Neon;
-                clone.Color = CONFIG.ChamsColor;
-                clone.Transparency = CONFIG.ChamsTransparency;
-                clone.Size = part.Size + Vector3.new(0.15, 0.15, 0.15);
-                
-                local highlight = Instance.new("Highlight");
-                highlight.Name = "ChamsHighlight";
-                highlight.Adornee = clone;
-                highlight.FillColor = CONFIG.ChamsColor;
-                highlight.FillTransparency = CONFIG.ChamsTransparency;
-                highlight.OutlineColor = CONFIG.ChamsColor;
-                highlight.OutlineTransparency = 0;
-                highlight.Parent = clone;
-                
-                clone.Parent = part;
-                
-                local weld = Instance.new("WeldConstraint");
-                weld.Part0 = part;
-                weld.Part1 = clone;
-                weld.Parent = clone;
-            end
-        end
+-- Helper to interpolate health bar color (Green -> Yellow -> Red)
+local function getHealthColor(percent)
+    percent = math.clamp(percent, 0, 1);
+    if percent > 0.5 then
+        return Color3.fromRGB(255, 255, 0):Lerp(Color3.fromRGB(0, 255, 100), (percent - 0.5) * 2);
+    else
+        return Color3.fromRGB(255, 40, 40):Lerp(Color3.fromRGB(255, 255, 0), percent * 2);
     end
 end
 
-local function removeChams(character)
-    if not character then return; end
-    for _, part in ipairs(character:GetChildren()) do
-        if part:IsA("BasePart") then
-            local overlay = part:FindFirstChild("LayeredNeonChams");
-            if overlay then overlay:Destroy(); end
-        end
-    end
+-- Helper to position and orient a UI Frame as a 2D vector line
+local function drawLine(frame, p1, p2, thickness, color)
+    local dx = p2.X - p1.X;
+    local dy = p2.Y - p1.Y;
+    local dist = math.sqrt(dx * dx + dy * dy);
+    local angle = math.deg(math.atan2(dy, dx));
+
+    frame.Position = UDim2.new(0, (p1.X + p2.X) / 2 - dist / 2, 0, (p1.Y + p2.Y) / 2 - thickness / 2);
+    frame.Size = UDim2.new(0, dist, 0, thickness);
+    frame.Rotation = angle;
+    frame.BackgroundColor3 = color;
+    frame.Visible = true;
 end
 
 local function createEntityUI()
@@ -114,27 +109,17 @@ local function createEntityUI()
     container.Name = "EntityESP";
     container.Parent = ScreenGui;
 
-    local glow = Instance.new("Frame");
-    glow.Name = "Glow";
-    glow.BackgroundTransparency = 1;
-    glow.Visible = false;
-    glow.Parent = container;
-
-    local glowStroke = Instance.new("UIStroke");
-    glowStroke.Color = CONFIG.GlowColor;
-    glowStroke.Thickness = 3;
-    glowStroke.Parent = glow;
-
-    local box = Instance.new("Frame");
-    box.Name = "Box";
-    box.BackgroundTransparency = 1;
-    box.Visible = false;
-    box.Parent = container;
-
-    local boxStroke = Instance.new("UIStroke");
-    boxStroke.Color = CONFIG.BoxColor;
-    boxStroke.Thickness = 1;
-    boxStroke.Parent = box;
+    -- Skeleton Line Pool (up to 16 lines max for R15)
+    local skeletonLines = {};
+    for i = 1, 16 do
+        local line = Instance.new("Frame");
+        line.Name = "SkeletonLine_" .. i;
+        line.AnchorPoint = Vector2.new(0.5, 0.5);
+        line.BorderSizePixel = 0;
+        line.Visible = false;
+        line.Parent = container;
+        table.insert(skeletonLines, line);
+    end
 
     local healthBorder = Instance.new("Frame");
     healthBorder.Name = "HealthBorder";
@@ -184,8 +169,7 @@ local function createEntityUI()
 
     return {
         Container = container,
-        Glow = glow,
-        Box = box,
+        SkeletonLines = skeletonLines,
         HealthBorder = healthBorder,
         HealthBg = healthBg,
         HealthFill = healthFill,
@@ -207,21 +191,6 @@ end
 
 local function setupPlayer(player)
     if player == LocalPlayer then return; end
-
-    player.CharacterAdded:Connect(function(char)
-        task.delay(0.5, function()
-            if char and char.Parent then
-                applyChams(char);
-            end
-        end);
-    end);
-    
-    if player.Character then
-        task.delay(0.5, function()
-            applyChams(player.Character);
-        end);
-    end
-    
     espCache[player] = createEntityUI();
 end
 
@@ -232,9 +201,6 @@ end
 Players.PlayerAdded:Connect(setupPlayer);
 Players.PlayerRemoving:Connect(function(player)
     removeEntityCache(player);
-    if player.Character then
-        removeChams(player.Character);
-    end
 end);
 
 local function checkAndSetupNPC(model)
@@ -248,11 +214,6 @@ local function checkAndSetupNPC(model)
 
     if humanoid and rootPart then
         espCache[model] = createEntityUI();
-        task.delay(0.5, function()
-            if model and model.Parent then
-                applyChams(model);
-            end
-        end);
     end
 end
 
@@ -304,10 +265,7 @@ RunService.RenderStepped:Connect(function()
                 end
 
                 if passTeamCheck then
-                    if CONFIG.ChamsEnabled then
-                        applyChams(character);
-                    end
-
+                    -- Bounds calculation for UI element positioning
                     local minX, minY = math.huge, math.huge;
                     local maxX, maxY = -math.huge, -math.huge;
                     local validPoints = false;
@@ -331,7 +289,7 @@ RunService.RenderStepped:Connect(function()
                                 };
 
                                 for i = 1, 8 do
-                                    local screenPos, onScreen = Camera:WorldToViewportPoint(corners[i]);
+                                    local screenPos = Camera:WorldToViewportPoint(corners[i]);
                                     if screenPos.Z > 0 then
                                         validPoints = true;
                                         minX = math.min(minX, screenPos.X);
@@ -352,20 +310,47 @@ RunService.RenderStepped:Connect(function()
                         local x = minX;
                         local y = minY;
 
-                        cache.Box.Position = UDim2.new(0, x, 0, y);
-                        cache.Box.Size = UDim2.new(0, width, 0, height);
-                        cache.Box.Visible = true;
+                        -- Render Skeleton Lines
+                        if CONFIG.SkeletonEnabled then
+                            local isR15 = humanoid.RigType == Enum.HumanoidRigType.R15;
+                            local connections = isR15 and R15_CONNECTIONS or R6_CONNECTIONS;
+                            local lineIndex = 1;
 
-                        local glowOffset = 1;
-                        cache.Glow.Position = UDim2.new(0, x - glowOffset, 0, y - glowOffset);
-                        cache.Glow.Size = UDim2.new(0, width + (glowOffset * 2), 0, height + (glowOffset * 2));
-                        cache.Glow.Visible = true;
+                            for _, connection in ipairs(connections) do
+                                local partA = character:FindFirstChild(connection[1]);
+                                local partB = character:FindFirstChild(connection[2]);
 
+                                if partA and partB then
+                                    local posA, visA = Camera:WorldToViewportPoint(partA.Position);
+                                    local posB, visB = Camera:WorldToViewportPoint(partB.Position);
+
+                                    if posA.Z > 0 and posB.Z > 0 then
+                                        local lineFrame = cache.SkeletonLines[lineIndex];
+                                        if lineFrame then
+                                            drawLine(lineFrame, posA, posB, CONFIG.SkeletonThickness, CONFIG.SkeletonColor);
+                                            lineIndex = lineIndex + 1;
+                                        end
+                                    end
+                                end
+                            end
+
+                            -- Hide remaining unused skeleton lines
+                            for i = lineIndex, #cache.SkeletonLines do
+                                cache.SkeletonLines[i].Visible = false;
+                            end
+                        else
+                            for _, lineFrame in ipairs(cache.SkeletonLines) do
+                                lineFrame.Visible = false;
+                            end
+                        end
+
+                        -- Dynamic Gradient Health Bar
                         if CONFIG.HealthBarEnabled then
                             local barWidth = 3;
                             local barOffset = 5;
                             local healthPercent = math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1);
                             local barHeight = height * healthPercent;
+                            local dynamicHealthColor = getHealthColor(healthPercent);
 
                             cache.HealthBorder.Position = UDim2.new(0, x - barWidth - barOffset - 1, 0, y - 1);
                             cache.HealthBorder.Size = UDim2.new(0, barWidth + 2, 0, height + 2);
@@ -377,6 +362,7 @@ RunService.RenderStepped:Connect(function()
 
                             cache.HealthFill.Position = UDim2.new(0, x - barWidth - barOffset, 0, y + (height - barHeight));
                             cache.HealthFill.Size = UDim2.new(0, barWidth, 0, barHeight);
+                            cache.HealthFill.BackgroundColor3 = dynamicHealthColor;
                             cache.HealthFill.Visible = true;
                         else
                             cache.HealthBorder.Visible = false;
@@ -384,6 +370,7 @@ RunService.RenderStepped:Connect(function()
                             cache.HealthFill.Visible = false;
                         end
 
+                        -- Distance Text
                         if CONFIG.DistanceEnabled then
                             local distance = (camPos - rootPart.Position).Magnitude;
                             cache.DistanceText.Text = math.floor(distance) .. "m";
@@ -394,6 +381,7 @@ RunService.RenderStepped:Connect(function()
                             cache.DistanceText.Visible = false;
                         end
 
+                        -- Name Text
                         if CONFIG.NameEnabled and entityName ~= "" then
                             cache.NameText.Text = entityName;
                             cache.NameText.Position = UDim2.new(0, x + (width / 2) - 75, 0, y - 18);
@@ -408,8 +396,9 @@ RunService.RenderStepped:Connect(function()
         end
 
         if shouldHide then
-            cache.Box.Visible = false;
-            cache.Glow.Visible = false;
+            for _, lineFrame in ipairs(cache.SkeletonLines) do
+                lineFrame.Visible = false;
+            end
             cache.HealthBorder.Visible = false;
             cache.HealthBg.Visible = false;
             cache.HealthFill.Visible = false;
@@ -417,7 +406,6 @@ RunService.RenderStepped:Connect(function()
             cache.DistanceText.Visible = false;
 
             if typeof(key) == "Instance" and key:IsA("Model") and (not character or not character.Parent) then
-                removeChams(key);
                 removeEntityCache(key);
             end
         end
