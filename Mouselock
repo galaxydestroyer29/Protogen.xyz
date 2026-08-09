@@ -8,9 +8,12 @@ local FOV_RADIUS = 40
 local enabled = false
 local lockedTarget = nil
 
+-- Micro-jitter configuration parameters for human-like variation
+local JITTER_INTENSITY = 1.5
+
 -- Create intense gradient glow effect using 12 layered circles
 local glowRings = {}
-local layerCount = 12
+local layerCount = 30
 for i = 1, layerCount do
     local ring = Drawing.new("Circle")
     ring.Visible = false
@@ -101,7 +104,14 @@ RunService.RenderStepped:Connect(function()
     
     local target = getTarget()
     if target then
-        -- Switched to Camera CFrame to eliminate mouse stutter, locking bugs, and input conflicts
-        Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
+        -- Generate micro-jitter vector offsets to simulate natural muscle variation and prevent rigid tracking
+        local jitterX = (math.random() - 0.5) * JITTER_INTENSITY * 2
+        local jitterY = (math.random() - 0.5) * JITTER_INTENSITY * 2
+        local jitterZ = (math.random() - 0.5) * JITTER_INTENSITY * 2
+        
+        local jitteredPosition = target.Position + Vector3.new(jitterX, jitterY, jitterZ)
+        
+        -- Apply jittered vector directly to camera orientation
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, jitteredPosition)
     end
 end)
