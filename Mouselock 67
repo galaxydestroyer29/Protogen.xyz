@@ -1,15 +1,25 @@
+--[[\
+    Advanced Zero-Prediction Mouse-Lock Aim Automation System
+    Target Environment: Locked-Center Tactical / FPS Frameworks
+    Features: 40px FOV, 12-Layer Gradient Glow, Sticky Head Lock, 'E' Toggle
+]]--
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local GuiService = game:GetService("GuiService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
+-- Configuration Parameters
 local FOV_RADIUS = 40
-local enabled = false
-local lockedTarget = nil
+local ENABLED = false
+local LOCKED_TARGET = nil
 
--- Intense gradient glow setup using 12 layered circles
+-- Sensitivity scaling factor to bridge angular delta with engine mouse processing
+-- Adjust this value if tracking feels too fast (increase) or too slow (decrease)
+local MOUSE_SENSITIVITY_SCALE = 1.2
+
+-- Initialize 12-Layer Gradient Glow FOV Rings
 local glowRings = {}
 local layerCount = 12
 for i = 1, layerCount do
@@ -23,7 +33,7 @@ for i = 1, layerCount do
     table.insert(glowRings, ring)
 end
 
--- Main FOV Circle
+-- Main FOV Circle Layer
 local FOV_Circle = Drawing.new("Circle")
 FOV_Circle.Visible = false
 FOV_Circle.Radius = FOV_RADIUS
@@ -32,89 +42,99 @@ FOV_Circle.Thickness = 1.5
 FOV_Circle.Transparency = 1
 FOV_Circle.Filled = false
 
-local function updateVisibility(isVisible)
-    FOV_Circle.Visible = isVisible
+local function setVisualsVisible(state)
+    FOV_Circle.Visible = state
     for _, ring in ipairs(glowRings) do
-        ring.Visible = isVisible
+        ring.Visible = state
     end
 end
 
--- Toggle visibility and activation with 'E'
+-- Input Toggle Listener ('E' Key)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if not gameProcessed and input.KeyCode == Enum.KeyCode.E then
-        enabled = not enabled
-        updateVisibility(enabled)
-        if not enabled then
-            lockedTarget = nil
+        ENABLED = not ENABLED
+        setVisualsVisible(ENABLED)
+        if not ENABLED then
+            LOCKED_TARGET = nil
         end
     end
 end)
 
-local function getTarget()
-    local mouse = UserInputService:GetMouseLocation()
+local function getClosestTargetWithinFOV()
+    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
     
-    -- Sticky lock: maintains lock strictly on the chosen target until they die, leave, or go off-screen
-    if lockedTarget and lockedTarget.Parent and lockedTarget.Parent:FindFirstChild("Humanoid") then
-        local humanoid = lockedTarget.Parent.Humanoid
+    -- Maintain Sticky Lock: Verify current locked target remains valid, alive, and on-screen
+    if LOCKED_TARGET and LOCKED_TARGET.Parent and LOCKED_TARGET.Parent:FindFirstChild("Humanoid") then
+        local humanoid = LOCKED_TARGET.Parent.Humanoid
         if humanoid.Health > 0 then
-            local _, onScreen = Camera:WorldToViewportPoint(lockedTarget.Position)
+            local _, onScreen = Camera:WorldToViewportPoint(LOCKED_TARGET.Position)
             if onScreen then
-                return lockedTarget
+                return LOCKED_TARGET
             end
         end
     end
     
-    lockedTarget = nil
-    local closest, minD = nil, FOV_RADIUS
+    -- Reset lock and scan for the closest valid target within the FOV radius
+    LOCKED_TARGET = nil
+    local closestTarget = nil
+    local minDistance = FOV_RADIUS
     
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character then
-            local head = p.Character:FindFirstChild("Head")
-            local humanoid = p.Character:FindFirstChild("Humanoid")
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local head = player.Character:FindFirstChild("Head")
+            local humanoid = player.Character:FindFirstChild("Humanoid")
             
             if head and humanoid and humanoid.Health > 0 then
-                local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
+                local viewportPos, onScreen = Camera:WorldToViewportPoint(head.Position)
                 if onScreen then
-                    local dist = (Vector2.new(pos.X, pos.Y) - mouse).Magnitude
-                    if dist <= minD then
-                        minD = dist
-                        closest = head
+                    local screenPos2D = Vector2.new(viewportPos.X, viewportPos.Y)
+                    local distanceToCenter = (screenPos2D - screenCenter).Magnitude
+                    
+                    if distanceToCenter <= minDistance then
+                        minDistance = distanceToCenter
+                        closestTarget = head
                     end
                 end
             end
         end
     end
     
-    lockedTarget = closest
-    return lockedTarget
+    LOCKED_TARGET = closestTarget
+    return LOCKED_TARGET
 end
 
 RunService.RenderStepped:Connect(function()
-    local mouse = UserInputService:GetMouseLocation()
+    -- Center position for crosshair/FOV rendering in locked-center environments
+    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
     
-    -- Keep FOV circle instantly synchronized to cursor position
-    FOV_Circle.Position = mouse
+    -- Synchronize FOV Circle and Glow Rings to Screen Center
+    FOV_Circle.Position = screenCenter
     for _, ring in ipairs(glowRings) do
-        ring.Position = mouse
+        ring.Position = screenCenter
     end
     
-    if not enabled then return end
+    if not ENABLED then return end
     
-    local target = getTarget()
-    if target then
-        local pos, onScreen = Camera:WorldToViewportPoint(target.Position)
-        if onScreen then
-            -- Account for Roblox Topbar GUI inset to ensure absolute precision
-            local inset = GuiService:GetGuiInset()
-            local targetX = pos.X
-            local targetY = pos.Y + inset.Y
-            
-            -- Absolute mouse cursor lock
-            if mousemoveabs then
-                mousemoveabs(targetX, targetY)
-            elseif mousemoverrel then
-                mousemoverrel(targetX - mouse.X, targetY - mouse.Y)
-            end
-        end
+    local targetHead = getClosestTargetWithinFOV()
+    if targetHead then
+        -- Angular Delta Calculation (Yaw & Pitch) for precise mouse-aim simulation
+        local camCFrame = Camera.CFrame
+        local objectSpaceVector = camCFrame:VectorToObjectSpace(targetHead.Position - camCFrame.Position)
+        
+        local yaw = math.atan2(-objectSpaceVector.X, -objectSpaceVector.Z)
+        local pitch = math.asin(objectSpaceVector.Y / objectSpaceVector.Magnitude)
+        
+        -- Convert angular radians into screen-space pixel deltas based on active viewport dimensions and FOV
+        local viewportSize = Camera.ViewportSize
+        local fovRadians = math.rad(Camera.FieldOfView)
+        
+        local scaleFactorX = (viewportSize.X / fovRadians) * MOUSE_SENSITIVITY_SCALE
+        local scaleFactorY = (viewportSize.Y / fovRadians) * MOUSE_SENSITIVITY_SCALE
+        
+        local deltaX = yaw * scaleFactorX
+        local deltaY = -pitch * scaleFactorY
+        
+        -- Transmit raw relative mouse adjustment packets
+        mousemoverrel(deltaX, deltaY)
     end
 end)
