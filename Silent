@@ -1,4 +1,6 @@
--- 
+-- ==========================================================
+-- SILENT AIM MODULE (ANTI-FREEZE & GRADIENT GLOW FOV)
+-- ==========================================================
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
@@ -9,13 +11,15 @@ local localPlayer = Players.LocalPlayer
 local isSilentAimEnabled = false
 local TOGGLE_KEY = Enum.KeyCode.E -- Press E to toggle
 local FOV_RADIUS = 200 
-local DEEP_BLUE = Color3.fromRGB(10, 80, 220) -- Deep blue color
 
 -- Environment & Safeguards
 local env = (getgenv and getgenv()) or _G or {}
 local safeHookMeta = env.hookmetamethod or hookmetamethod
 local safeGetNamecall = env.getnamecallmethod or getnamecallmethod
 local safeCheckCaller = env.checkcaller or checkcaller or function() return false end
+
+-- Runtime Cache (Fixes Screen Freezing)
+local cachedTargetPosition = nil
 
 -- GUI Setup (Protected UI parent)
 local success, uiParent = pcall(function()
@@ -24,12 +28,12 @@ local success, uiParent = pcall(function()
 end)
 if not success or not uiParent then uiParent = localPlayer:WaitForChild("PlayerGui") end
 
-if uiParent:FindFirstChild("ARCS_GlowingFOV") then
-    uiParent:FindFirstChild("ARCS_GlowingFOV"):Destroy()
+if uiParent:FindFirstChild("ARCS_GradientFOV") then
+    uiParent:FindFirstChild("ARCS_GradientFOV"):Destroy()
 end
 
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "ARCS_GlowingFOV"
+screenGui.Name = "ARCS_GradientFOV"
 screenGui.ResetOnSpawn = false
 screenGui.IgnoreGuiInset = true
 screenGui.DisplayOrder = 99999
@@ -52,23 +56,32 @@ local coreCorner = Instance.new("UICorner")
 coreCorner.CornerRadius = UDim.new(1, 0)
 coreCorner.Parent = coreRing
 
--- Layered UIStrokes for a smooth outer glow effect
+-- Deep Blue Gradient for Intense Glow
+local fovGradient = Instance.new("UIGradient")
+fovGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0.0, Color3.fromRGB(30, 144, 255)),  -- Electric Blue
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(10, 80, 220)),   -- Deep Blue
+    ColorSequenceKeypoint.new(1.0, Color3.fromRGB(5, 30, 120))     -- Rich Navy
+})
+fovGradient.Parent = coreRing
+
+-- Layered UIStrokes for Enhanced Outer Glow
 local outerGlow = Instance.new("UIStroke")
-outerGlow.Color = DEEP_BLUE
-outerGlow.Thickness = 6
-outerGlow.Transparency = 0.75
+outerGlow.Thickness = 8
+outerGlow.Transparency = 0.8
+outerGlow.UIGradient = fovGradient
 outerGlow.Parent = coreRing
 
 local midGlow = Instance.new("UIStroke")
-midGlow.Color = DEEP_BLUE
-midGlow.Thickness = 3.5
-midGlow.Transparency = 0.4
+midGlow.Thickness = 4.5
+midGlow.Transparency = 0.5
+midGlow.UIGradient = fovGradient
 midGlow.Parent = coreRing
 
 local coreStroke = Instance.new("UIStroke")
-coreStroke.Color = DEEP_BLUE
-coreStroke.Thickness = 1.5
+coreStroke.Thickness = 1.8
 coreStroke.Transparency = 0
+coreStroke.UIGradient = fovGradient
 coreStroke.Parent = coreRing
 
 -- Keybind Listener
@@ -80,23 +93,22 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
--- RenderStepped to center FOV on screen
+-- Render Loop for Centering FOV & Target Caching (Zero Lag / Freeze Prevention)
 RunService.RenderStepped:Connect(function()
     local curCam = Workspace.CurrentCamera
-    if curCam then
-        local center = Vector2.new(curCam.ViewportSize.X / 2, curCam.ViewportSize.Y / 2)
-        fovMaster.Position = UDim2.new(0, center.X, 0, center.Y)
-    end
-end)
-
--- Closest Target Finder
-local function getClosestTargetPosition()
-    local curCam = Workspace.CurrentCamera
-    if not curCam then return nil end
+    if not curCam then return end
     
+    local center = Vector2.new(curCam.ViewportSize.X / 2, curCam.ViewportSize.Y / 2)
+    fovMaster.Position = UDim2.new(0, center.X, 0, center.Y)
+
+    if not isSilentAimEnabled then
+        cachedTargetPosition = nil
+        return
+    end
+
+    -- Efficient target resolution cached per frame
     local closestPart = nil
     local shortestDist = FOV_RADIUS
-    local screenCenter = Vector2.new(curCam.ViewportSize.X / 2, curCam.ViewportSize.Y / 2)
 
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= localPlayer and player.Character then
@@ -108,7 +120,7 @@ local function getClosestTargetPosition()
                 local screenPos, onScreen = curCam:WorldToViewportPoint(targetPart.Position)
                 if onScreen then
                     local screenVector = Vector2.new(screenPos.X, screenPos.Y)
-                    local distToCenter = (screenVector - screenCenter).Magnitude
+                    local distToCenter = (screenVector - center).Magnitude
                     
                     if distToCenter < shortestDist then
                         shortestDist = distToCenter
@@ -119,10 +131,10 @@ local function getClosestTargetPosition()
         end
     end
     
-    return closestPart and closestPart.Position or nil
-end
+    cachedTargetPosition = closestPart and closestPart.Position or nil
+end)
 
--- Secure Metamethod Hook
+-- Secure Metamethod Hook (Instant Redirection)
 if safeHookMeta and safeGetNamecall then
     pcall(function()
         local oldNamecall
@@ -130,23 +142,19 @@ if safeHookMeta and safeGetNamecall then
             local method = safeGetNamecall()
             local args = {...}
 
-            if not safeCheckCaller() and isSilentAimEnabled then
-                local targetPos = getClosestTargetPosition()
-                
-                if targetPos then
-                    if method == "Raycast" and self == Workspace then
-                        local origin = args[1]
-                        local direction = args[2]
-                        if typeof(origin) == "Vector3" and typeof(direction) == "Vector3" then
-                            args[2] = (targetPos - origin).Unit * direction.Magnitude
-                            return oldNamecall(self, unpack(args))
-                        end
-                    elseif (method == "ScreenPointToRay" or method == "ViewportPointToRay") and (self == Workspace.CurrentCamera or (typeof(self) == "Instance" and self:IsA("Camera"))) then
-                        local camera = Workspace.CurrentCamera
-                        local origin = camera and camera.CFrame.Position or Vector3.zero
-                        local dir = (targetPos - origin).Unit * 1000
-                        return Ray.new(origin, dir)
+            if not safeCheckCaller() and isSilentAimEnabled and cachedTargetPosition then
+                if method == "Raycast" and self == Workspace then
+                    local origin = args[1]
+                    local direction = args[2]
+                    if typeof(origin) == "Vector3" and typeof(direction) == "Vector3" then
+                        args[2] = (cachedTargetPosition - origin).Unit * direction.Magnitude
+                        return oldNamecall(self, unpack(args))
                     end
+                elseif (method == "ScreenPointToRay" or method == "ViewportPointToRay") and (self == Workspace.CurrentCamera or (typeof(self) == "Instance" and self:IsA("Camera"))) then
+                    local camera = Workspace.CurrentCamera
+                    local origin = camera and camera.CFrame.Position or Vector3.zero
+                    local dir = (cachedTargetPosition - origin).Unit * 1000
+                    return Ray.new(origin, dir)
                 end
             end
 
@@ -155,4 +163,4 @@ if safeHookMeta and safeGetNamecall then
     end)
 end
 
-print("[ARCS] Glowing Deep Blue FOV & Silent Aim loaded. Press [E] to toggle.")
+print("[ARCS] Gradient Glow Silent Aim loaded successfully. Press [E] to toggle.")
