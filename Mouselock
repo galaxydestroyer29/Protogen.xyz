@@ -8,7 +8,7 @@ local FOV_RADIUS = 40
 local enabled = false
 local lockedTarget = nil
 
--- Create intense gradient glow effect using 12 layered circles
+-- Intense gradient glow setup
 local glowRings = {}
 local layerCount = 12
 for i = 1, layerCount do
@@ -50,13 +50,11 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 local function getTarget()
-    local mouse = UserInputService:GetMouseLocation()
-    
-    -- Robust sticky lock: maintain lock strictly until player dies or leaves the screen
+    -- 100% Hard-Lock: Never drops target unless they die, leave, or go entirely off-screen
     if lockedTarget and lockedTarget.Parent and lockedTarget.Parent:FindFirstChild("Humanoid") then
         local humanoid = lockedTarget.Parent.Humanoid
         if humanoid.Health > 0 then
-            local pos, onScreen = Camera:WorldToViewportPoint(lockedTarget.Position)
+            local _, onScreen = Camera:WorldToViewportPoint(lockedTarget.Position)
             if onScreen then
                 return lockedTarget
             end
@@ -65,6 +63,7 @@ local function getTarget()
     
     lockedTarget = nil
     local closest, minD = nil, FOV_RADIUS
+    local mouse = UserInputService:GetMouseLocation()
     
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character then
@@ -91,7 +90,7 @@ end
 RunService.RenderStepped:Connect(function()
     local mouse = UserInputService:GetMouseLocation()
     
-    -- Update FOV visuals instantly
+    -- Sync UI instantly
     FOV_Circle.Position = mouse
     for _, ring in ipairs(glowRings) do
         ring.Position = mouse
@@ -101,13 +100,13 @@ RunService.RenderStepped:Connect(function()
     
     local target = getTarget()
     if target then
+        -- Retrieve exact raw positional coordinates of the head in the current frame
         local pos = Camera:WorldToViewportPoint(target.Position)
         
-        -- Force the physical 2D mouse cursor directly to the target's absolute screen coordinates
+        -- Force absolute snap directly to coordinates. No velocity, no prediction, no smoothing.
         if mousemoveabs then
             mousemoveabs(pos.X, pos.Y)
         else
-            -- 100% hard-lock fallback if absolute positioning isn't supported by your executor
             mousemoverel(pos.X - mouse.X, pos.Y - mouse.Y)
         end
     end
