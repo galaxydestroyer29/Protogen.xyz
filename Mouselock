@@ -1,15 +1,12 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
-local FOV_RADIUS = 55
+local FOV_RADIUS = 100
 
--- Center of the viewport screen for stable camera locking
-local function getScreenCenter()
-    return Camera.ViewportSize / 2
-end
-
+-- Create intense gradient glow effect
 local glowRings = {}
 for i = 1, 8 do
     local ring = Drawing.new("Circle")
@@ -22,6 +19,7 @@ for i = 1, 8 do
     table.insert(glowRings, ring)
 end
 
+-- Main FOV Circle
 local FOV_Circle = Drawing.new("Circle")
 FOV_Circle.Visible = true
 FOV_Circle.Radius = FOV_RADIUS
@@ -30,9 +28,8 @@ FOV_Circle.Thickness = 1.5
 FOV_Circle.Transparency = 1
 FOV_Circle.Filled = false
 
-local function getTarget()
+local function getTarget(mousePos)
     local closest, minD = nil, FOV_RADIUS
-    local screenCenter = getScreenCenter()
     
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character then
@@ -42,7 +39,7 @@ local function getTarget()
                 local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
                 if onScreen then
                     local screenPos = Vector2.new(pos.X, pos.Y)
-                    local dist = (screenPos - screenCenter).Magnitude
+                    local dist = (screenPos - mousePos).Magnitude
                     if dist < minD then
                         minD = dist
                         closest = head
@@ -55,17 +52,19 @@ local function getTarget()
 end
 
 RunService.RenderStepped:Connect(function()
-    local screenCenter = getScreenCenter()
+    local mousePos = UserInputService:GetMouseLocation()
     
-    -- Keep FOV circle and gradient glow centered on screen
-    FOV_Circle.Position = screenCenter
+    -- Make FOV circle and glow rings follow the mouse cursor
+    FOV_Circle.Position = mousePos
     for _, ring in ipairs(glowRings) do
-        ring.Position = screenCenter
+        ring.Position = mousePos
     end
     
-    local target = getTarget()
-    if target then
-        -- Locks camera instantly and maintains lock through jumps and movement
-        Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, target.Position)
+    -- Hold 'E' to activate and lock onto target within the mouse FOV
+    if UserInputService:IsKeyDown(Enum.KeyCode.E) then
+        local target = getTarget(mousePos)
+        if target then
+            Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, target.Position)
+        end
     end
 end)
