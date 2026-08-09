@@ -5,10 +5,6 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
 local FOV_RADIUS = 40
--- TWEAK THIS: If the mouse violently shakes or overshoots, lower this number (e.g., 0.2 or 0.1). 
--- If it tracks too slowly, raise it.
-local SENSITIVITY = 0.5 
-
 local enabled = false
 local lockedTarget = nil
 
@@ -78,7 +74,6 @@ local function getTarget()
             if head and humanoid and humanoid.Health > 0 then
                 local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
                 if onScreen then
-                    -- Check if they are inside the FOV
                     local dist = (Vector2.new(pos.X, pos.Y) - mouse).Magnitude
                     if dist <= minD then
                         minD = dist
@@ -96,7 +91,7 @@ end
 RunService.RenderStepped:Connect(function()
     local mouse = UserInputService:GetMouseLocation()
     
-    -- Update positions instantly every frame with zero delay
+    -- Update FOV visuals instantly
     FOV_Circle.Position = mouse
     for _, ring in ipairs(glowRings) do
         ring.Position = mouse
@@ -108,11 +103,12 @@ RunService.RenderStepped:Connect(function()
     if target then
         local pos = Camera:WorldToViewportPoint(target.Position)
         
-        -- Calculate raw pixel distance from crosshair to target
-        local distX = pos.X - mouse.X
-        local distY = pos.Y - mouse.Y
-        
-        -- Apply physical mouse movement, scaled by sensitivity to prevent bugs/overshooting
-        mousemoverel(distX * SENSITIVITY, distY * SENSITIVITY)
+        -- Force the physical 2D mouse cursor directly to the target's absolute screen coordinates
+        if mousemoveabs then
+            mousemoveabs(pos.X, pos.Y)
+        else
+            -- 100% hard-lock fallback if absolute positioning isn't supported by your executor
+            mousemoverel(pos.X - mouse.X, pos.Y - mouse.Y)
+        end
     end
 end)
