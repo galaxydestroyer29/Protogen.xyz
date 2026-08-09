@@ -5,6 +5,10 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
 local FOV_RADIUS = 40
+-- TWEAK THIS: If the mouse violently shakes or overshoots, lower this number (e.g., 0.2 or 0.1). 
+-- If it tracks too slowly, raise it.
+local SENSITIVITY = 0.5 
+
 local enabled = false
 local lockedTarget = nil
 
@@ -50,17 +54,21 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 local function getTarget()
-    -- Robust sticky lock: maintain lock strictly until player dies or leaves, preventing random unlocks
+    local mouse = UserInputService:GetMouseLocation()
+    
+    -- Robust sticky lock: maintain lock strictly until player dies or leaves the screen
     if lockedTarget and lockedTarget.Parent and lockedTarget.Parent:FindFirstChild("Humanoid") then
         local humanoid = lockedTarget.Parent.Humanoid
         if humanoid.Health > 0 then
-            return lockedTarget
+            local pos, onScreen = Camera:WorldToViewportPoint(lockedTarget.Position)
+            if onScreen then
+                return lockedTarget
+            end
         end
     end
     
     lockedTarget = nil
     local closest, minD = nil, FOV_RADIUS
-    local mouse = UserInputService:GetMouseLocation()
     
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character then
@@ -70,8 +78,9 @@ local function getTarget()
             if head and humanoid and humanoid.Health > 0 then
                 local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
                 if onScreen then
+                    -- Check if they are inside the FOV
                     local dist = (Vector2.new(pos.X, pos.Y) - mouse).Magnitude
-                    if dist < minD then
+                    if dist <= minD then
                         minD = dist
                         closest = head
                     end
@@ -97,6 +106,13 @@ RunService.RenderStepped:Connect(function()
     
     local target = getTarget()
     if target then
-        Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
+        local pos = Camera:WorldToViewportPoint(target.Position)
+        
+        -- Calculate raw pixel distance from crosshair to target
+        local distX = pos.X - mouse.X
+        local distY = pos.Y - mouse.Y
+        
+        -- Apply physical mouse movement, scaled by sensitivity to prevent bugs/overshooting
+        mousemoverel(distX * SENSITIVITY, distY * SENSITIVITY)
     end
 end)
