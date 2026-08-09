@@ -36,9 +36,6 @@ local function updateVisibility(isVisible)
     for _, ring in ipairs(glowRings) do
         ring.Visible = isVisible
     end
-    if not isVisible then
-        Camera.CameraType = Enum.CameraType.Custom
-    end
 end
 
 -- Toggle with 'E'
@@ -48,7 +45,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         updateVisibility(enabled)
         if not enabled then
             lockedTarget = nil
-            Camera.CameraType = Enum.CameraType.Custom
         end
     end
 end)
@@ -56,7 +52,7 @@ end)
 local function getTarget()
     local mouse = UserInputService:GetMouseLocation()
     
-    -- Sticky lock check: maintain lock on chosen target
+    -- Sticky lock check: maintain lock on chosen target without dropping
     if lockedTarget and lockedTarget.Parent and lockedTarget.Parent:FindFirstChild("Humanoid") then
         local humanoid = lockedTarget.Parent.Humanoid
         if humanoid.Health > 0 then
@@ -105,21 +101,10 @@ RunService.RenderStepped:Connect(function()
     
     local target = getTarget()
     if target then
-        -- Prevent Roblox core camera scripts from fighting updates during jumps and movement
-        if Camera.CameraType ~= Enum.CameraType.Scriptable then
-            Camera.CameraType = Enum.CameraType.Scriptable
-        end
-        
-        -- Lock camera position to the local player's head while looking directly at the target's head
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head") then
-            local localHead = LocalPlayer.Character.Head.Position
-            Camera.CFrame = CFrame.new(localHead, target.Position)
-        else
-            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
-        end
-    else
-        if Camera.CameraType == Enum.CameraType.Scriptable then
-            Camera.CameraType = Enum.CameraType.Custom
+        local pos, onScreen = Camera:WorldToViewportPoint(target.Position)
+        if onScreen then
+            -- Directly manipulate mouse movement using mousemoverel
+            mousemoverel(pos.X - mouse.X, pos.Y - mouse.Y)
         end
     end
 end)
