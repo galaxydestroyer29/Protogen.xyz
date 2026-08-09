@@ -4,17 +4,17 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
-local FOV_RADIUS = 15 -- 30 pixels wide (diameter)
+local FOV_RADIUS = 30
 
--- Create gradient glow effect using layered circles
+-- Create an intense gradient glow effect using expanded layered circles
 local glowRings = {}
-local layerCount = 4
+local layerCount = 8
 for i = 1, layerCount do
     local ring = Drawing.new("Circle")
     ring.Visible = true
-    ring.Radius = FOV_RADIUS + (i * 2)
+    ring.Radius = FOV_RADIUS + (i * 1.5)
     ring.Color = Color3.fromRGB(255, 255, 255)
-    ring.Transparency = 0.35 / i
+    ring.Transparency = math.clamp(0.6 - (i * 0.06), 0.05, 0.6)
     ring.Thickness = 1
     ring.Filled = false
     table.insert(glowRings, ring)
