@@ -1,11 +1,14 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local GuiService = game:GetService("GuiService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
 local FOV_RADIUS = 40
+-- TWEAK THIS: If the cursor sits too high at long distances, increase this number (e.g., 10, 25, 36)
+-- If it sits too low, make it negative (e.g., -10)
+local Y_OFFSET = 15 
+
 local enabled = false
 local lockedTarget = nil
 
@@ -51,6 +54,8 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 local function getTarget()
+    local mouse = UserInputService:GetMouseLocation()
+    
     -- 100% Hard-Lock logic
     if lockedTarget and lockedTarget.Parent and lockedTarget.Parent:FindFirstChild("Humanoid") then
         local humanoid = lockedTarget.Parent.Humanoid
@@ -64,7 +69,6 @@ local function getTarget()
     
     lockedTarget = nil
     local closest, minD = nil, FOV_RADIUS
-    local mouse = UserInputService:GetMouseLocation()
     
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character then
@@ -72,7 +76,7 @@ local function getTarget()
             local humanoid = p.Character:FindFirstChild("Humanoid")
             
             if head and humanoid and humanoid.Health > 0 then
-                -- Target acquisition strictly checks viewport to ignore GUI insets for pure distance math
+                -- Strictly use ViewportPoint to match hardware mouse behavior 1:1
                 local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
                 if onScreen then
                     local dist = (Vector2.new(pos.X, pos.Y) - mouse).Magnitude
@@ -90,7 +94,6 @@ local function getTarget()
 end
 
 RunService.RenderStepped:Connect(function()
-    -- Always align Drawing API to pure viewport mouse
     local mouse = UserInputService:GetMouseLocation()
     
     FOV_Circle.Position = mouse
@@ -102,20 +105,19 @@ RunService.RenderStepped:Connect(function()
     
     local target = getTarget()
     if target then
-        -- FIX: Use WorldToScreenPoint instead of ViewportPoint to account for the physical screen
-        local pos, onScreen = Camera:WorldToScreenPoint(target.Position)
+        -- Retrieve pure Viewport coordinates
+        local pos, onScreen = Camera:WorldToViewportPoint(target.Position)
         
         if onScreen then
-            -- FIX: Safely subtract the Roblox GUI TopBar inset (usually 36 pixels) which causes diagonal drifting
-            local inset = GuiService:GetGuiInset()
-            local targetX = pos.X - inset.X
-            local targetY = pos.Y - inset.Y
+            -- Apply our manual vertical compensator to fix the distance drop-off
+            local targetX = pos.X
+            local targetY = pos.Y + Y_OFFSET
             
-            -- FIX: Exclusively use relative movement calculated from the corrected ScreenPoint
-            -- This bypasses Windows DPI scaling bugs and Window Border offsets
+            -- Calculate precise distance from hardware mouse to target pixel
             local deltaX = targetX - mouse.X
             local deltaY = targetY - mouse.Y
             
+            -- Instantly step the cursor directly to the target
             mousemoverel(deltaX, deltaY)
         end
     end
