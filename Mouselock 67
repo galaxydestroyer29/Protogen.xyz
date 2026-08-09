@@ -6,16 +6,15 @@ local Camera = workspace.CurrentCamera
 
 local FOV_RADIUS = 40
 
--- === SENSITIVITY TUNING ===
--- Adjust this if the mouse moves too fast or too slow.
--- Because this uses smooth 3D angles, it will not break when you move, jump, or change distance.
-local MOUSE_SENSITIVITY = 1.0 
--- ==========================
+-- === MOUSE LOCK STABILITY SETTING ===
+-- This smoothing/damping factor prevents the mouse from "flying to the sides" or violently shaking.
+-- Higher number = smoother/more controlled; Lower number = faster snap. (Recommended: 1.5 to 2.5)
+local SMOOTHING = 1.5
 
 local enabled = false
 local lockedTarget = nil
 
--- Intense gradient glow setup (12 layered rings)
+-- Intense gradient glow setup (12 layered circles)
 local glowRings = {}
 local layerCount = 12
 for i = 1, layerCount do
@@ -45,7 +44,7 @@ local function updateVisibility(isVisible)
     end
 end
 
--- Toggle with 'E'
+-- Toggle visibility and activation with 'E'
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if not gameProcessed and input.KeyCode == Enum.KeyCode.E then
         enabled = not enabled
@@ -59,7 +58,7 @@ end)
 local function getTarget()
     local mouse = UserInputService:GetMouseLocation()
     
-    -- Robust sticky lock: maintains lock on the chosen target until they die or leave screen
+    -- Sticky lock: maintain lock strictly on the chosen target until they die, leave, or go off-screen
     if lockedTarget and lockedTarget.Parent and lockedTarget.Parent:FindFirstChild("Humanoid") then
         local humanoid = lockedTarget.Parent.Humanoid
         if humanoid.Health > 0 then
@@ -98,7 +97,7 @@ end
 RunService.RenderStepped:Connect(function()
     local mouse = UserInputService:GetMouseLocation()
     
-    -- Sync FOV circle position instantly to follow your cursor
+    -- Keep FOV circle instantly synchronized to cursor/screen center position
     FOV_Circle.Position = mouse
     for _, ring in ipairs(glowRings) do
         ring.Position = mouse
@@ -108,25 +107,14 @@ RunService.RenderStepped:Connect(function()
     
     local target = getTarget()
     if target then
-        -- ANGLE-BASED MOUSE LOCK MATHEMATICAL CONVERSION
-        -- Computes exact 3D Yaw and Pitch angles from camera to head, eliminating distance/height drift.
-        local camCFrame = Camera.CFrame
-        local localVector = camCFrame:VectorToObjectSpace(target.Position - camCFrame.Position)
-        
-        local yaw = math.atan2(-localVector.X, -localVector.Z)
-        local pitch = math.asin(localVector.Y / localVector.Magnitude)
-        
-        -- Convert radians to precise screen mouse pixels based on current resolution and FOV
-        local viewportSize = Camera.ViewportSize
-        local fovRad = math.rad(Camera.FieldOfView)
-        
-        local scaleX = (viewportSize.X / fovRad) * MOUSE_SENSITIVITY
-        local scaleY = (viewportSize.Y / fovRad) * MOUSE_SENSITIVITY
-        
-        local deltaX = yaw * scaleX
-        local deltaY = -pitch * scaleY
-        
-        -- Direct mouse cursor actuation (Mouse Lock, NOT Camera Lock) with zero prediction
-        mousemoverrel(deltaX, deltaY)
+        local pos, onScreen = Camera:WorldToViewportPoint(target.Position)
+        if onScreen then
+            -- Calculate precise pixel difference from current mouse position to target head
+            local deltaX = pos.X - mouse.X
+            local deltaY = pos.Y - mouse.Y
+            
+            -- Apply damped mouse movement (Mouse Lock) to eliminate flying, jumping bugs, and overshoots
+            mousemoverrel(deltaX / SMOOTHING, deltaY / SMOOTHING)
+        end
     end
 end)
