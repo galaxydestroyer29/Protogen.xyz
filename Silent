@@ -16,8 +16,9 @@ local safeHookMeta = env.hookmetamethod or hookmetamethod
 local safeGetNamecall = env.getnamecallmethod or getnamecallmethod
 local safeCheckCaller = env.checkcaller or checkcaller or function() return false end
 
--- Runtime Cache (Fixes Screen Freezing)
+-- Runtime Caches (Fixes Freezing & Misses)
 local cachedTargetPosition = nil
+local cachedTargetPart = nil
 
 -- GUI Setup (Protected UI parent)
 local success, uiParent = pcall(function()
@@ -26,12 +27,12 @@ local success, uiParent = pcall(function()
 end)
 if not success or not uiParent then uiParent = localPlayer:WaitForChild("PlayerGui") end
 
-if uiParent:FindFirstChild("ARCS_GradientFOV") then
-    uiParent:FindFirstChild("ARCS_GradientFOV"):Destroy()
+if uiParent:FindFirstChild("ARCS_TacticalFOV") then
+    uiParent:FindFirstChild("ARCS_TacticalFOV"):Destroy()
 end
 
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "ARCS_GradientFOV"
+screenGui.Name = "ARCS_TacticalFOV"
 screenGui.ResetOnSpawn = false
 screenGui.IgnoreGuiInset = true
 screenGui.DisplayOrder = 99999
@@ -91,7 +92,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
--- Render Loop for Centering FOV & Target Caching (Zero Lag / Freeze Prevention)
+-- Render Loop for Centering FOV & Target Caching (Zero Lag)
 RunService.RenderStepped:Connect(function()
     local curCam = Workspace.CurrentCamera
     if not curCam then return end
@@ -101,10 +102,10 @@ RunService.RenderStepped:Connect(function()
 
     if not isSilentAimEnabled then
         cachedTargetPosition = nil
+        cachedTargetPart = nil
         return
     end
 
-    -- Efficient target resolution cached per frame
     local closestPart = nil
     local shortestDist = FOV_RADIUS
 
@@ -129,10 +130,11 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
+    cachedTargetPart = closestPart
     cachedTargetPosition = closestPart and closestPart.Position or nil
 end)
 
--- Secure Metamethod Hook (Instant Redirection)
+-- Secure Metamethod Hook (Raycasts + Custom Weapon Remotes)
 if safeHookMeta and safeGetNamecall then
     pcall(function()
         local oldNamecall
@@ -141,6 +143,7 @@ if safeHookMeta and safeGetNamecall then
             local args = {...}
 
             if not safeCheckCaller() and isSilentAimEnabled and cachedTargetPosition then
+                -- Intercept Workspace Raycasts
                 if method == "Raycast" and self == Workspace then
                     local origin = args[1]
                     local direction = args[2]
@@ -148,11 +151,30 @@ if safeHookMeta and safeGetNamecall then
                         args[2] = (cachedTargetPosition - origin).Unit * direction.Magnitude
                         return oldNamecall(self, unpack(args))
                     end
+                
+                -- Intercept Camera Screen Point Conversions
                 elseif (method == "ScreenPointToRay" or method == "ViewportPointToRay") and (self == Workspace.CurrentCamera or (typeof(self) == "Instance" and self:IsA("Camera"))) then
                     local camera = Workspace.CurrentCamera
                     local origin = camera and camera.CFrame.Position or Vector3.zero
                     local dir = (cachedTargetPosition - origin).Unit * 1000
                     return Ray.new(origin, dir)
+
+                -- Intercept Custom Gun Remotes (FireServer for custom weapon engines)
+                elseif method == "FireServer" and (self.Name:lower():find("fire") or self.Name:lower():find("shoot") or self.Name:lower():find("bullet") or self.Name:lower():find("project") or self.Name:lower():find("weapon")) then
+                    for i, arg in ipairs(args) do
+                        if typeof(arg) == "Vector3" then
+                            local camera = Workspace.CurrentCamera
+                            local origin = camera and camera.CFrame.Position or Vector3.zero
+                            if (arg - origin).Magnitude < 1500 then
+                                args[i] = cachedTargetPosition
+                            end
+                        elseif typeof(arg) == "Instance" and arg:IsA("Model") and arg:FindFirstChild("Humanoid") then
+                            if cachedTargetPart and cachedTargetPart.Parent then
+                                args[i] = cachedTargetPart.Parent
+                            end
+                        end
+                    end
+                    return oldNamecall(self, unpack(args))
                 end
             end
 
@@ -161,4 +183,4 @@ if safeHookMeta and safeGetNamecall then
     end)
 end
 
-print("[ARCS] Gradient Glow Silent Aim loaded successfully. Press [E] to toggle.")
+print("[ARCS] Tactical Silent Aim loaded. Press [E] to toggle.")
