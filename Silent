@@ -1,0 +1,93 @@
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local localPlayer = Players.LocalPlayer
+
+-- Configuration
+local isSilentAimEnabled = false
+local TOGGLE_KEY = Enum.KeyCode.E -- Change this keybind if desired
+local FOV_RADIUS = 200 -- Maximum screen radius to find targets
+
+-- Environment & Safeguards
+local env = (getgenv and getgenv()) or _G or {}
+local safeHookMeta = env.hookmetamethod or hookmetamethod
+local safeGetNamecall = env.getnamecallmethod or getnamecallmethod
+local safeCheckCaller = env.checkcaller or checkcaller or function() return false end
+
+-- Keybind Listener
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == TOGGLE_KEY then
+        isSilentAimEnabled = not isSilentAimEnabled
+        print("[ARCS] Silent Aim State:", isSilentAimEnabled and "ACTIVE" | "DISABLED")
+    end
+end)
+
+-- Optimized Closest Target Finder
+local function getClosestTargetPosition()
+    local curCam = Workspace.CurrentCamera
+    if not curCam then return nil end
+    
+    local closestPart = nil
+    local shortestDist = FOV_RADIUS
+    local screenCenter = Vector2.new(curCam.ViewportSize.X / 2, curCam.ViewportSize.Y / 2)
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= localPlayer and player.Character then
+            local char = player.Character
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            local targetPart = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+            
+            if humanoid and humanoid.Health > 0 and targetPart then
+                local screenPos, onScreen = curCam:WorldToViewportPoint(targetPart.Position)
+                if onScreen then
+                    local screenVector = Vector2.new(screenPos.X, screenPos.Y)
+                    local distToCenter = (screenVector - screenCenter).Magnitude
+                    
+                    if distToCenter < shortestDist then
+                        shortestDist = distToCenter
+                        closestPart = targetPart
+                    end
+                end
+            end
+        end
+    end
+    
+    return closestPart and closestPart.Position or nil
+end
+
+-- Secure Metamethod Hook (Anti-Cheat Safe)
+if safeHookMeta and safeGetNamecall then
+    pcall(function()
+        local oldNamecall
+        oldNamecall = safeHookMeta(game, "__namecall", function(self, ...)
+            local method = safeGetNamecall()
+            local args = {...}
+
+            -- Only intercept when enabled, called by game scripts (not the executor), and a target exists
+            if not safeCheckCaller() and isSilentAimEnabled then
+                local targetPos = getClosestTargetPosition()
+                
+                if targetPos then
+                    if method == "Raycast" and self == Workspace then
+                        local origin = args[1]
+                        local direction = args[2]
+                        if typeof(origin) == "Vector3" and typeof(direction) == "Vector3" then
+                            args[2] = (targetPos - origin).Unit * direction.Magnitude
+                            return oldNamecall(self, unpack(args))
+                        end
+                    elseif (method == "ScreenPointToRay" or method == "ViewportPointToRay") and (self == Workspace.CurrentCamera or (typeof(self) == "Instance" and self:IsA("Camera"))) then
+                        local camera = Workspace.CurrentCamera
+                        local origin = camera and camera.CFrame.Position or Vector3.zero
+                        local dir = (targetPos - origin).Unit * 1000
+                        return Ray.new(origin, dir)
+                    end
+                end
+            end
+
+            return oldNamecall(self, ...)
+        end)
+    end)
+end
+
+print("[ARCS] Silent Aim loaded successfully. Press [E] to toggle.")
