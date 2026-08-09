@@ -1,4 +1,4 @@
--- Universal Skeleton & Dynamic Health ESP (Players + NPCs) - Native UI Engine
+-- Universal Clean White Skeleton & Dynamic Health ESP (Players + NPCs) - Native UI Engine
 -- Environment: Roblox Client (LocalScript)
 
 local CoreGui = game:GetService("CoreGui");
@@ -41,10 +41,10 @@ getgenv()._UniversalESPUI = ScreenGui;
 local CONFIG = {
     TeamCheck = false,
     
-    -- Skeleton Settings
+    -- Skeleton Settings (Clean White)
     SkeletonEnabled = true,
-    SkeletonColor = Color3.fromRGB(0, 240, 255),
-    SkeletonThickness = 1.5,
+    SkeletonColor = Color3.fromRGB(255, 255, 255),
+    SkeletonThickness = 1,
     
     -- UI Elements
     HealthBarEnabled = true,
@@ -90,7 +90,7 @@ local function getHealthColor(percent)
     end
 end
 
--- Helper to position and orient a UI Frame as a 2D vector line
+-- Draw crisp 2D line
 local function drawLine(frame, p1, p2, thickness, color)
     local dx = p2.X - p1.X;
     local dy = p2.Y - p1.Y;
@@ -109,7 +109,7 @@ local function createEntityUI()
     container.Name = "EntityESP";
     container.Parent = ScreenGui;
 
-    -- Skeleton Line Pool (up to 16 lines max for R15)
+    -- Skeleton Line Pool (up to 16 lines for R15)
     local skeletonLines = {};
     for i = 1, 16 do
         local line = Instance.new("Frame");
@@ -265,7 +265,6 @@ RunService.RenderStepped:Connect(function()
                 end
 
                 if passTeamCheck then
-                    -- Bounds calculation for UI element positioning
                     local minX, minY = math.huge, math.huge;
                     local maxX, maxY = -math.huge, -math.huge;
                     local validPoints = false;
@@ -310,7 +309,7 @@ RunService.RenderStepped:Connect(function()
                         local x = minX;
                         local y = minY;
 
-                        -- Render Skeleton Lines
+                        -- Render Crisp Clean White Skeleton
                         if CONFIG.SkeletonEnabled then
                             local isR15 = humanoid.RigType == Enum.HumanoidRigType.R15;
                             local connections = isR15 and R15_CONNECTIONS or R6_CONNECTIONS;
@@ -334,7 +333,6 @@ RunService.RenderStepped:Connect(function()
                                 end
                             end
 
-                            -- Hide remaining unused skeleton lines
                             for i = lineIndex, #cache.SkeletonLines do
                                 cache.SkeletonLines[i].Visible = false;
                             end
