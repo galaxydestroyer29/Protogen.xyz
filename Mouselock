@@ -1,0 +1,43 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+local FOV_RADIUS = 150
+local FOV_Circle = Drawing.new("Circle")
+FOV_Circle.Visible = true
+FOV_Circle.Radius = FOV_RADIUS
+FOV_Circle.Color = Color3.fromRGB(0, 255, 0)
+FOV_Circle.Thickness = 2
+FOV_Circle.Filled = false
+
+local function getTarget()
+    local closest, minD = nil, FOV_RADIUS
+    local mouse = UserInputService:GetMouseLocation()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local hrp = p.Character.HumanoidRootPart
+            local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+            if onScreen then
+                local dist = (Vector2.new(pos.X, pos.Y) - mouse).Magnitude
+                if dist < minD then
+                    minD = dist
+                    closest = hrp
+                end
+            end
+        end
+    end
+    return closest
+end
+
+RunService.RenderStepped:Connect(function()
+    local mouse = UserInputService:GetMouseLocation()
+    FOV_Circle.Position = mouse
+    
+    local target = getTarget()
+    if target then
+        local pos = Camera:WorldToViewportPoint(target.Position)
+        mousemoverel(pos.X - mouse.X, pos.Y - mouse.Y)
+    end
+end)
