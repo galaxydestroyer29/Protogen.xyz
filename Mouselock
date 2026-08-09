@@ -4,16 +4,19 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
-local FOV_RADIUS = 60
+local FOV_RADIUS = 40
+local enabled = false
+local lockedTarget = nil
 
--- High-performance optimized glow (3 lightweight layers to prevent any lag)
+-- Create an intense, heavy gradient glow effect using 12 layered circles
 local glowRings = {}
-for i = 1, 3 do
+local layerCount = 12
+for i = 1, layerCount do
     local ring = Drawing.new("Circle")
-    ring.Visible = true
-    ring.Radius = FOV_RADIUS + (i * 3)
+    ring.Visible = false
+    ring.Radius = FOV_RADIUS + (i * 1.5)
     ring.Color = Color3.fromRGB(255, 255, 255)
-    ring.Transparency = 0.25 / i
+    ring.Transparency = math.clamp(0.55 - (i * 0.04), 0.03, 0.55)
     ring.Thickness = 1
     ring.Filled = false
     table.insert(glowRings, ring)
@@ -21,16 +24,48 @@ end
 
 -- Main FOV Circle
 local FOV_Circle = Drawing.new("Circle")
-FOV_Circle.Visible = true
+FOV_Circle.Visible = false
 FOV_Circle.Radius = FOV_RADIUS
 FOV_Circle.Color = Color3.fromRGB(255, 255, 255)
 FOV_Circle.Thickness = 1.5
 FOV_Circle.Transparency = 1
 FOV_Circle.Filled = false
 
+local function updateVisibility(isVisible)
+    FOV_Circle.Visible = isVisible
+    for _, ring in ipairs(glowRings) do
+        ring.Visible = isVisible
+    end
+end
+
+-- Toggle with 'E'
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.E then
+        enabled = not enabled
+        updateVisibility(enabled)
+        if not enabled then
+            lockedTarget = nil
+        end
+    end
+end)
+
 local function getTarget()
-    local closest, minD = nil, FOV_RADIUS
     local mouse = UserInputService:GetMouseLocation()
+    
+    -- Sticky lock: Once a target is chosen, maintain tracking on them without dropping
+    if lockedTarget and lockedTarget.Parent and lockedTarget.Parent:FindFirstChild("Humanoid") then
+        local humanoid = lockedTarget.Parent.Humanoid
+        if humanoid.Health > 0 then
+            local _, onScreen = Camera:WorldToViewportPoint(lockedTarget.Position)
+            if onScreen then
+                return lockedTarget
+            end
+        end
+    end
+    
+    -- Find closest target within FOV if no active lock exists
+    lockedTarget = nil
+    local closest, minD = nil, FOV_RADIUS
     
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character then
@@ -49,20 +84,25 @@ local function getTarget()
             end
         end
     end
-    return closest
+    
+    lockedTarget = closest
+    return lockedTarget
 end
 
 RunService.RenderStepped:Connect(function()
     local mouse = UserInputService:GetMouseLocation()
     
-    -- Update positions efficiently
+    -- Update positions for main circle and glow layers
     FOV_Circle.Position = mouse
     for _, ring in ipairs(glowRings) do
         ring.Position = mouse
     end
     
+    if not enabled then return end
+    
     local target = getTarget()
     if target then
-        Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
+        local pos = Camera:WorldToViewportPoint(target.Position)
+        mousemoverel(pos.X - mouse.X, pos.Y - mouse.Y)
     end
 end)
