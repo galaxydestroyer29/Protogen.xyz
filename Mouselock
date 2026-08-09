@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
@@ -50,7 +51,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 local function getTarget()
-    -- 100% Hard-Lock: Never drops target unless they die, leave, or go entirely off-screen
+    -- 100% Hard-Lock logic
     if lockedTarget and lockedTarget.Parent and lockedTarget.Parent:FindFirstChild("Humanoid") then
         local humanoid = lockedTarget.Parent.Humanoid
         if humanoid.Health > 0 then
@@ -71,6 +72,7 @@ local function getTarget()
             local humanoid = p.Character:FindFirstChild("Humanoid")
             
             if head and humanoid and humanoid.Health > 0 then
+                -- Target acquisition strictly checks viewport to ignore GUI insets for pure distance math
                 local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
                 if onScreen then
                     local dist = (Vector2.new(pos.X, pos.Y) - mouse).Magnitude
@@ -88,9 +90,9 @@ local function getTarget()
 end
 
 RunService.RenderStepped:Connect(function()
+    -- Always align Drawing API to pure viewport mouse
     local mouse = UserInputService:GetMouseLocation()
     
-    -- Sync UI instantly
     FOV_Circle.Position = mouse
     for _, ring in ipairs(glowRings) do
         ring.Position = mouse
@@ -100,14 +102,21 @@ RunService.RenderStepped:Connect(function()
     
     local target = getTarget()
     if target then
-        -- Retrieve exact raw positional coordinates of the head in the current frame
-        local pos = Camera:WorldToViewportPoint(target.Position)
+        -- FIX: Use WorldToScreenPoint instead of ViewportPoint to account for the physical screen
+        local pos, onScreen = Camera:WorldToScreenPoint(target.Position)
         
-        -- Force absolute snap directly to coordinates. No velocity, no prediction, no smoothing.
-        if mousemoveabs then
-            mousemoveabs(pos.X, pos.Y)
-        else
-            mousemoverel(pos.X - mouse.X, pos.Y - mouse.Y)
+        if onScreen then
+            -- FIX: Safely subtract the Roblox GUI TopBar inset (usually 36 pixels) which causes diagonal drifting
+            local inset = GuiService:GetGuiInset()
+            local targetX = pos.X - inset.X
+            local targetY = pos.Y - inset.Y
+            
+            -- FIX: Exclusively use relative movement calculated from the corrected ScreenPoint
+            -- This bypasses Windows DPI scaling bugs and Window Border offsets
+            local deltaX = targetX - mouse.X
+            local deltaY = targetY - mouse.Y
+            
+            mousemoverel(deltaX, deltaY)
         end
     end
 end)
