@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
@@ -8,7 +9,10 @@ local FOV_RADIUS = 40
 local enabled = false
 local lockedTarget = nil
 
--- Create intense gradient glow effect using 12 layered circles
+-- Compensate for Roblox's TopBar GUI Inset (36px) to fix vertical tracking drift
+local guiInset = GuiService:GetGuiInset()
+
+-- Create an intense, heavy gradient glow effect using 12 layered circles
 local glowRings = {}
 local layerCount = 12
 for i = 1, layerCount do
@@ -38,7 +42,7 @@ local function updateVisibility(isVisible)
     end
 end
 
--- Toggle with 'E'
+-- Toggle tracking and FOV visibility using 'E'
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if not gameProcessed and input.KeyCode == Enum.KeyCode.E then
         enabled = not enabled
@@ -50,9 +54,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 local function getTarget()
-    local mouse = UserInputService:GetMouseLocation()
+    local mousePos = UserInputService:GetMouseLocation()
     
-    -- Sticky lock check: maintain lock on chosen target without dropping
+    -- Sticky Lock: Retain lock on target as long as they are alive and on-screen
     if lockedTarget and lockedTarget.Parent and lockedTarget.Parent:FindFirstChild("Humanoid") then
         local humanoid = lockedTarget.Parent.Humanoid
         if humanoid.Health > 0 then
@@ -63,6 +67,7 @@ local function getTarget()
         end
     end
     
+    -- If no target is locked, scan for the closest target within FOV_RADIUS
     lockedTarget = nil
     local closest, minD = nil, FOV_RADIUS
     
@@ -74,7 +79,9 @@ local function getTarget()
             if head and humanoid and humanoid.Health > 0 then
                 local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
                 if onScreen then
-                    local dist = (Vector2.new(pos.X, pos.Y) - mouse).Magnitude
+                    -- Account for topbar offset when comparing against mouse location
+                    local targetScreenPos = Vector2.new(pos.X, pos.Y)
+                    local dist = (targetScreenPos - mousePos).Magnitude
                     if dist < minD then
                         minD = dist
                         closest = head
@@ -88,23 +95,30 @@ local function getTarget()
     return lockedTarget
 end
 
-RunService.RenderStepped:Connect(function()
-    local mouse = UserInputService:GetMouseLocation()
+-- Bind directly to RenderPriority.Last to run AFTER camera physics updates (eliminates jump stutter)
+RunService:BindToRenderStep("MouseLockPipeline", Enum.RenderPriority.Last.Value, function()
+    local mousePos = UserInputService:GetMouseLocation()
     
-    -- Update positions for main circle and glow layers
-    FOV_Circle.Position = mouse
+    -- Update visual FOV circle and glow ring positions
+    FOV_Circle.Position = mousePos
     for _, ring in ipairs(glowRings) do
-        ring.Position = mouse
+        ring.Position = mousePos
     end
     
     if not enabled then return end
     
     local target = getTarget()
     if target then
-        local pos, onScreen = Camera:WorldToViewportPoint(target.Position)
+        local targetScreenPos, onScreen = Camera:WorldToViewportPoint(target.Position)
         if onScreen then
-            -- Directly manipulate mouse movement using mousemoverel
-            mousemoverel(pos.X - mouse.X, pos.Y - mouse.Y)
+            -- Calculate absolute pixel delta between target and cursor position
+            local deltaX = targetScreenPos.X - mousePos.X
+            local deltaY = (targetScreenPos.Y - guiInset.Y) - (mousePos.Y - guiInset.Y)
+            
+            -- Apply direct physical relative mouse displacement
+            if mousemoverel then
+                mousemoverel(deltaX, deltaY)
+            end
         end
     end
 end)
