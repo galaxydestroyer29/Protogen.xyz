@@ -8,12 +8,9 @@ local FOV_RADIUS = 40
 local enabled = false
 local lockedTarget = nil
 
--- Micro-jitter configuration parameters for human-like variation
-local JITTER_INTENSITY = 1.5
-
 -- Create intense gradient glow effect using 12 layered circles
 local glowRings = {}
-local layerCount = 30
+local layerCount = 12
 for i = 1, layerCount do
     local ring = Drawing.new("Circle")
     ring.Visible = false
@@ -39,6 +36,9 @@ local function updateVisibility(isVisible)
     for _, ring in ipairs(glowRings) do
         ring.Visible = isVisible
     end
+    if not isVisible then
+        Camera.CameraType = Enum.CameraType.Custom
+    end
 end
 
 -- Toggle with 'E'
@@ -48,6 +48,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         updateVisibility(enabled)
         if not enabled then
             lockedTarget = nil
+            Camera.CameraType = Enum.CameraType.Custom
         end
     end
 end)
@@ -104,14 +105,21 @@ RunService.RenderStepped:Connect(function()
     
     local target = getTarget()
     if target then
-        -- Generate micro-jitter vector offsets to simulate natural muscle variation and prevent rigid tracking
-        local jitterX = (math.random() - 0.5) * JITTER_INTENSITY * 2
-        local jitterY = (math.random() - 0.5) * JITTER_INTENSITY * 2
-        local jitterZ = (math.random() - 0.5) * JITTER_INTENSITY * 2
+        -- Prevent Roblox core camera scripts from fighting updates during jumps and movement
+        if Camera.CameraType ~= Enum.CameraType.Scriptable then
+            Camera.CameraType = Enum.CameraType.Scriptable
+        end
         
-        local jitteredPosition = target.Position + Vector3.new(jitterX, jitterY, jitterZ)
-        
-        -- Apply jittered vector directly to camera orientation
-        Camera.CFrame = CFrame.new(Camera.CFrame.Position, jitteredPosition)
+        -- Lock camera position to the local player's head while looking directly at the target's head
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head") then
+            local localHead = LocalPlayer.Character.Head.Position
+            Camera.CFrame = CFrame.new(localHead, target.Position)
+        else
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
+        end
+    else
+        if Camera.CameraType == Enum.CameraType.Scriptable then
+            Camera.CameraType = Enum.CameraType.Custom
+        end
     end
 end)
