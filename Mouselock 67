@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
@@ -8,11 +9,7 @@ local FOV_RADIUS = 40
 local enabled = false
 local lockedTarget = nil
 
--- TUNING: Controls the snap speed/smoothness to prevent the mouse from flying off when moving or jumping.
--- Higher number = smoother/slower pull; Lower number = faster snap. (Recommended: 2.0 to 3.0)
-local SMOOTHING = 2.5 
-
--- Create 12-Layer Gradient Glow FOV Rings
+-- Create intense gradient glow effect using 12 layered circles
 local glowRings = {}
 local layerCount = 12
 for i = 1, layerCount do
@@ -26,7 +23,7 @@ for i = 1, layerCount do
     table.insert(glowRings, ring)
 end
 
--- Main FOV Circle Layer
+-- Main FOV Circle
 local FOV_Circle = Drawing.new("Circle")
 FOV_Circle.Visible = false
 FOV_Circle.Radius = FOV_RADIUS
@@ -37,8 +34,16 @@ FOV_Circle.Filled = false
 
 local function updateVisibility(isVisible)
     FOV_Circle.Visible = isVisible
-    for _, ring in ipairs(glowRings) do
+    for _, ring in idipairs(glowRings) do -- fixed loop syntax below
         ring.Visible = isVisible
+    end
+end
+
+-- Fix loop for visibility toggle safely
+local function setGlowVisible(state)
+    FOV_Circle.Visible = state
+    for _, ring in ipairs(glowRings) do
+        ring.Visible = state
     end
 end
 
@@ -46,7 +51,7 @@ end
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if not gameProcessed and input.KeyCode == Enum.KeyCode.E then
         enabled = not enabled
-        updateVisibility(enabled)
+        setGlowVisible(enabled)
         if not enabled then
             lockedTarget = nil
         end
@@ -56,7 +61,7 @@ end)
 local function getTarget()
     local mouse = UserInputService:GetMouseLocation()
     
-    -- Sticky lock: Once locked on a player, keep tracking them until they die or leave the screen
+    -- Sticky lock check: maintain lock strictly until player dies or leaves screen
     if lockedTarget and lockedTarget.Parent and lockedTarget.Parent:FindFirstChild("Humanoid") then
         local humanoid = lockedTarget.Parent.Humanoid
         if humanoid.Health > 0 then
@@ -67,14 +72,13 @@ local function getTarget()
         end
     end
     
-    -- Find closest player whose head is inside the FOV circle around your cursor
     lockedTarget = nil
     local closest, minD = nil, FOV_RADIUS
     
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            local head = player.Character:FindFirstChild("Head")
-            local humanoid = player.Character:FindFirstChild("Humanoid")
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character then
+            local head = p.Character:FindFirstChild("Head")
+            local humanoid = p.Character:FindFirstChild("Humanoid")
             
             if head and humanoid and humanoid.Health > 0 then
                 local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
@@ -96,7 +100,7 @@ end
 RunService.RenderStepped:Connect(function()
     local mouse = UserInputService:GetMouseLocation()
     
-    -- Make the FOV circle and its glow rings instantly follow your in-game mouse cursor
+    -- Keep FOV tracking the mouse position exactly
     FOV_Circle.Position = mouse
     for _, ring in ipairs(glowRings) do
         ring.Position = mouse
@@ -106,14 +110,18 @@ RunService.RenderStepped:Connect(function()
     
     local target = getTarget()
     if target then
-        local pos, onScreen = Camera:WorldToViewportPoint(target.Position)
+        -- Convert 3D world position to viewport coordinates
+        local viewportPoint, onScreen = Camera:WorldToViewportPoint(target.Position)
+        
         if onScreen then
-            -- Calculate pixel distance from current mouse position to target's head
-            local deltaX = pos.X - mouse.X
-            local deltaY = pos.Y - mouse.Y
+            -- Account for GuiInset (top bar offset difference between absolute screen and viewport)
+            local inset = GuiService:GetGuiInset()
+            local absoluteX = viewportPoint.X
+            local absoluteY = viewportPoint.Y + inset.Y
             
-            -- Lock mouse cursor to the target smoothly, preventing flying/jumping bugs
-            mousemoverrel(deltaX / SMOOTHING, deltaY / SMOOTHING)
+            if mousemoveabs then
+                mousemoveabs(absoluteX, absoluteY)
+            end
         end
     end
 end)
