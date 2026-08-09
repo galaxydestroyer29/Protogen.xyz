@@ -4,26 +4,48 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
-local FOV_RADIUS = 150
+local FOV_RADIUS = 15 -- 30 pixels wide (diameter)
+
+-- Create gradient glow effect using layered circles
+local glowRings = {}
+local layerCount = 4
+for i = 1, layerCount do
+    local ring = Drawing.new("Circle")
+    ring.Visible = true
+    ring.Radius = FOV_RADIUS + (i * 2)
+    ring.Color = Color3.fromRGB(255, 255, 255)
+    ring.Transparency = 0.35 / i
+    ring.Thickness = 1
+    ring.Filled = false
+    table.insert(glowRings, ring)
+end
+
+-- Main FOV Circle
 local FOV_Circle = Drawing.new("Circle")
 FOV_Circle.Visible = true
 FOV_Circle.Radius = FOV_RADIUS
-FOV_Circle.Color = Color3.fromRGB(0, 255, 0)
-FOV_Circle.Thickness = 2
+FOV_Circle.Color = Color3.fromRGB(255, 255, 255)
+FOV_Circle.Thickness = 1.5
+FOV_Circle.Transparency = 1
 FOV_Circle.Filled = false
 
 local function getTarget()
     local closest, minD = nil, FOV_RADIUS
     local mouse = UserInputService:GetMouseLocation()
+    
     for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-            local hrp = p.Character.HumanoidRootPart
-            local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-            if onScreen then
-                local dist = (Vector2.new(pos.X, pos.Y) - mouse).Magnitude
-                if dist < minD then
-                    minD = dist
-                    closest = hrp
+        if p ~= LocalPlayer and p.Character then
+            local head = p.Character:FindFirstChild("Head")
+            local humanoid = p.Character:FindFirstChild("Humanoid")
+            
+            if head and humanoid and humanoid.Health > 0 then
+                local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
+                if onScreen then
+                    local dist = (Vector2.new(pos.X, pos.Y) - mouse).Magnitude
+                    if dist < minD then
+                        minD = dist
+                        closest = head
+                    end
                 end
             end
         end
@@ -33,7 +55,12 @@ end
 
 RunService.RenderStepped:Connect(function()
     local mouse = UserInputService:GetMouseLocation()
+    
+    -- Update positions for main circle and glow layers
     FOV_Circle.Position = mouse
+    for _, ring in ipairs(glowRings) do
+        ring.Position = mouse
+    end
     
     local target = getTarget()
     if target then
