@@ -76,7 +76,7 @@ local CheatState = {
     }
 }
  
-Track references to UI elements globally to allow the loader to update them
+-- Track references to UI elements globally to allow the loader to update them
 local UIElements = {}
 
 local function SafeCreateDrawing(type)
@@ -910,7 +910,7 @@ FPSBox:AddToggle("Potato mode", false, function(state) CheatState.FPS.PotatoMode
 FPSBox:AddToggle("Performance mode", false, function(state) CheatState.FPS.PerformanceMode = state end)
 local function StartGlowLoop()
     local rgbConnection = RunService.Heartbeat:Connect(function()
-        local hue = (tick() % 4) / 4 -- Speed of the RGB transition (4 seconds full cycle)
+        local hue = (tick() % 4) / 4 
         local color = Color3.fromHSV(hue, 1, 1)
         
         for _, callback in ipairs(RGBCallbacks) do
