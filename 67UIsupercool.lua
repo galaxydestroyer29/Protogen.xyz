@@ -80,7 +80,6 @@ Track references to UI elements globally to allow the loader to update them
 local UIElements = {}
 
 local function SafeCreateDrawing(type)
-    -- Robust drawing check fallback
     local success, obj = pcall(function() 
         if Drawing and Drawing.new then
             return Drawing.new(type) 
@@ -89,7 +88,7 @@ local function SafeCreateDrawing(type)
     end)
     if success and obj then return obj end
     
-    -- Silent dummy fallback to prevent execution halts
+    -- Silent dummy fallback
     local dummy = {}
     local mt = {
         __index = function() return function() end end,
