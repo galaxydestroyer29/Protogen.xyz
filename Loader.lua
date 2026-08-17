@@ -1,8 +1,7 @@
 
--- protogen.xyz Frontend Loader (safer)
 print("Frontend busted in my ass successfully!")
 
-local url = "https://raw.githubusercontent.com/galaxydestroyer29/Protogen.xyz/refs/heads/main/UI.lua"
+local url = "https://raw.githubusercontent.com/galaxydestroyer29/Protogen.xyz/refs/heads/main/67UIsupercool.lua"
 
 local success, response = pcall(function()
     return game:HttpGet(url, true)
