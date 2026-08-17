@@ -1,22 +1,12 @@
 
-print("Frontend busted in my ass successfully!")
+local rawUrl = "https://raw.githubusercontent.com/galaxydestroyer29/Protogen.xyz/refs/heads/main/67UIsupercool.lua"
 
-local url = "https://raw.githubusercontent.com/galaxydestroyer29/Protogen.xyz/refs/heads/main/67UIsupercool.lua"
+local cacheBypassUrl = rawUrl .. "?t=" .. tostring(tick())
 
-local success, response = pcall(function()
-    return game:HttpGet(url, true)
+local success, result = pcall(function()
+    return loadstring(game:HttpGet(cacheBypassUrl))()
 end)
 
-if success and response then
-    local loadSuccess, loadErr = pcall(function()
-        loadstring(response)()
-    end)
-    
-    if loadSuccess then
-        print("protogen.xyz ready.")
-    else
-        warn("Frontend didnt bust. Not horny, send error to dev: " .. tostring(loadErr))
-    end
-else
-    warn("Failed to fetch script: " .. tostring(response))
+if not success then
+    warn("Failed to load script: " .. tostring(result))
 end
