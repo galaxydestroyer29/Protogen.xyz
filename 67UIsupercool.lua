@@ -22,7 +22,7 @@ local FatalityUI = {
     }
 }
 
-UI Configuration State Storage
+-- UI Configuration State Storage
 local CheatState = {
     YawHallucination = false,
     YawSpeed = 1,
@@ -870,13 +870,13 @@ local ExploitsBox   = MiscTab:AddGroupbox("Exploits", 2)
 local CameraBox     = MiscTab:AddGroupbox("camera", 2)
 local FPSBox        = MiscTab:AddGroupbox("FPS", 2)
 
-1. Movement Groupbox
+-- 1. Movement Groupbox
 MovementBox:AddToggle("Jump fly (buggy)", false, function(state) CheatState.Movement.JumpFly = state end)
 MovementBox:AddToggle("B-Hop", false, function(state) CheatState.Movement.BHop = state end)
 MovementBox:AddToggle("Noclip", false, function(state) CheatState.Movement.Noclip = state end)
 MovementBox:AddToggle("NO FALL DAMAGE", false, function(state) CheatState.Movement.NoFallDamage = state end, true)
 
-2. Atmosphere Groupbox
+-- 2. Atmosphere Groupbox
 local timeSlider
 local timeToggle = AtmosphereBox:AddToggle("Time changer", false, function(state)
     timeSlider:SetVisible(state)
